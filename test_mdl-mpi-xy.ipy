@@ -9,7 +9,7 @@ from IPython.parallel import Client
 import cPickle
 import numpy as np
 
-tmax = 500
+tmax = 5
 
 nbx = 3
 nby = 2
@@ -123,7 +123,7 @@ Ft = 0.15
 dtMin = dt
 dtMax = 6
 dVmax = 1
-
+thresh = 0.01
 
 time=numpy.zeros(round(tmax/(dt*decim))+1)
 Vm=numpy.zeros((m2.Nx,m2.Ny,round(tmax/(dt*decim))+1))
@@ -139,14 +139,15 @@ while (m2.time<tmax):
         m2.Istim[xyIstim2[0]:xyIstim2[1],xyIstim2[2]:xyIstim2[3]]=Ist
 
 
-    m2.derivT(dt)
-#		max_dy = numpy.max(abs(m2.dY[...,0].all())-Ft)
-#		max_dy = MPI.COMM_WORLD.allreduce(max_dy,op=MPI.MAX)
-#		dt = dtMin*dVmax/max_dy;
-#		if dt > dtMax:
-#			dt = dtMax
-#		if dt < dtMin:
-#			dt = dtMin
+    if abs(m2.diff2d(m2.Y[:,:,0]).any()) > thresh:
+        m2.derivT(dt)
+#    max_dy = numpy.max(abs(m2.dY[:,:,0].all())-Ft)
+#    max_dy = MPI.COMM_WORLD.allreduce(max_dy,op=MPI.MAX)
+#    dt = dtMin*dVmax/max_dy;
+#    if dt > dtMax:
+#        dt = dtMax
+#    if dt < dtMin:
+#        dt = dtMin
 
 #    #Communication x
     to_send_1 = m2.Y[1,:,0]
@@ -180,32 +181,27 @@ while (m2.time<tmax):
     to_recv_1 = m2.Y[:,-1,0]
     to_recv_2 = m2.Y[:,0,0]
 
-#    if rank % 2:
-#	    if rank/nbx != 0:
-#		    MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
-#	    if rank/nbx != nby - 1:
-#		    to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
-#		    MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
-#	    if rank/nbx != 0:
-#		    to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
-#    else:
-#	    if rank/nbx != nby - 1:
-#		    to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
-#	    if rank/nbx != 0:
-#		    MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
-#            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
-#	    if rank/nbx != nby - 1:
-#	        MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)	
-
-    if rank/nbx != 0:
-        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
-        MPI.COMM_WORLD.send(to_send_1, dest=rank-nbx)
+    if rank % 2:
+        if rank/nbx != 0:
+            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
+        if rank/nbx != nby - 1:
+            MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
+            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
+        if rank/nbx != 0:
+            MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
     else:
-        MPI.COMM_WORLD.send(to_send_2 , dest=rank+nbx)
-        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)        
+        if rank/nbx != nby - 1:
+            MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
+        if rank/nbx != 0:
+            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
+            MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)	    
+        if rank/nbx != nby - 1:
+            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
+        
 
     m2.Y[:,-1,0] = to_recv_1
     m2.Y[:,0,0] =  to_recv_2
+
 
     m2.time =m2.time+dt
     if not round(m2.time/dt)%decim:
@@ -229,7 +225,7 @@ tabx = view['x']
 taby = view['y']
 
 # Concatenation des resultats
-sol_total = np.empty((max(max(tabx)),max(max(taby)),NbIter+1))
+sol_total = np.empty((max(max(tabx)),max(max(taby)),len(time)))
 for i in rc.ids:
     i_client = find(i, tabrank)
     sol_total[tabx[i_client][0]:tabx[i_client][1],taby[i_client][0]:taby[i_client][1],:]=np.array(rc[i_client]['Vm'])
