@@ -3,20 +3,16 @@ import pylab
 from scipy.ndimage.filters import correlate1d
 
 class TissueModel:
-    """Generic cell and tissue model.
-    Contains common elements for the various cell/tissue models.
-    """
-    def __init__(self,Nx,Ny,dim,noise=0.0,mpi=[True,True]):
+    """Generic cell and tissue model."""
+    def __init__(self,Nx,Ny,dim,noise=0.0,mpi=[True,True,True,True]):
         """Model init."""
         #dimensions
         self.Name="Generic!"
-        #total padding cell layers along each dimension
         self.Padding=4
-        [first,last] = mpi
-        self.Nx=Nx+first*self.Padding/2+last*self.Padding/2
-        self.Ny=Ny+self.Padding
+	[firstx,lastx,firsty,lasty] = mpi
+        self.Nx=Nx+firstx*self.Padding/2+lastx*self.Padding/2
+        self.Ny=Ny+firsty*self.Padding/2+lasty*self.Padding/2
         self.time=0
-        #define state vector according to model dimensions
         if dim==3:
             Y0=[-50,0.079257,0.001]
         elif dim==6:
@@ -28,7 +24,7 @@ class TissueModel:
             self.Y=numpy.tile(numpy.array(Y0),(self.Nx,self.Ny,1))
             #mask for padding borders    
             self.mask=1e-4*numpy.ones(self.Y.shape[0:-1])
-            self.mask[first*self.Padding/2:self.Nx-last*self.Padding/2,self.Padding/2:self.Ny-self.Padding/2]=numpy.ones((self.Nx-first*self.Padding/2-last*self.Padding/2,self.Ny-self.Padding))   
+            self.mask[firstx*self.Padding/2:self.Nx-lastx*self.Padding/2,firsty*self.Padding/2:self.Ny-lasty*self.Padding/2]=numpy.ones((self.Nx-firstx*self.Padding/2-lastx*self.Padding/2,self.Ny-firsty*self.Padding/2-lasty*self.Padding/2))   
         elif (Nx+Ny)>1 and not(Nx*Ny):
             self.Y=numpy.tile(numpy.array(Y0),(Nx+Ny,1))    
         else:
@@ -98,11 +94,10 @@ class TissueModel:
 
 class Red3(TissueModel):
     """Cellular and tissular model Red3"""
-    def __init__(self,Nx,Ny,noise=0.0,mpi=[True,True]):
+    def __init__(self,Nx,Ny,noise=0.0,mpi=[True,True,True,True]):
         """Model init."""
         #Generic elements
         TissueModel.__init__(self,Nx,Ny,3,noise,mpi)
-        #Red3 specific variables/values
         self.Name="Red3"
         self.Gk=0.064
         self.Gkca=0.08
@@ -118,6 +113,7 @@ class Red3(TissueModel):
         self.Rca=5.97139101
         self.Jbase=0.02397327
         self.dY=numpy.empty(self.Y.shape)
+        #self.Istim[5:20,5]=0.2
         
     def derivT(self,dt):
         """Computes temporal derivative for red3 model."""
@@ -150,7 +146,6 @@ class Red6(TissueModel):
         """Model init."""
         #Generic elements
         TissueModel.__init__(self,Nx,Ny,6,noise)
-        #Red3 specific variables/values
         self.Name="Red6"
         self.Gca=0.09
         self.Gk=0.064
@@ -167,6 +162,7 @@ class Red6(TissueModel):
         self.Rca=5.97139101
         self.Jbase=0.02397327
         self.dY=numpy.empty(self.Y.shape)
+        #self.Istim[5:20,5]=0.2
         
     def derivT(self,dt):
         """Computes temporal derivative for red3 model."""
