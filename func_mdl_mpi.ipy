@@ -233,4 +233,4 @@ def timing(tmax):
     for i in range(5):
         [t,v]=myfunc(tmax)
         
-%prun -Dmpixy.stats timing(5)
+%prun -Dmpixy.stats timing(500)

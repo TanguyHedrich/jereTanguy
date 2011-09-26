@@ -23,13 +23,15 @@ def simu_euler_a(mdl,tmax):
     dtMin = dt
     dtMax = 6
     dVmax = 1
+    #Stim coord
+    mdl.stimCoord=[range(5,20),5]
     #Initialise storage variables
     t=numpy.zeros(round(tmax/(dt*decim))+1)
     Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
     #Integration
     while mdl.time<tmax:
         Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
-        mdl.Istim[5:20,5]=Ist
+        mdl.Istim[mdl.stimCoord]=Ist
        # mdl.Istim[50:95,100]=Ist
         mdl.derivT(dt)
         #define new time step
@@ -52,7 +54,7 @@ def timing(tmax):
         mdl=cell_mdl.Red3(80,120)
         [t,v]=simu_euler_a(mdl,tmax)
         
-%prun -Dserial.stats timing(500)
+%prun -Dserial2.stats timing(500)
 
 # %prun magic is used for profiling with IPython
 #%time [t,Vm]=simu_euler_a(m3,tmax)

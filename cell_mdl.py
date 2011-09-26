@@ -42,6 +42,7 @@ class TissueModel:
         self.Ra=500
         self.h=0.03
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
+        self.stimCoord=[0]
         
     def __repr__(self):
         """Print model infos."""
@@ -54,7 +55,7 @@ class TissueModel:
         return Dif*(4*self.Ra*self.Cm*self.h**2)    
     def diff2d(self,Var):
         Dif=self.derivative2(Var,0)+self.derivative2(Var,1)
-        Dif[self.Istim.nonzero()]=0
+        Dif[self.stimCoord]=0
         return Dif*2.222/16*self.mask
     def derivS(self):
         """Computes spatial derivative to get propagation."""
@@ -142,10 +143,10 @@ class Red3(TissueModel):
         
 class Red6(TissueModel):
     """Cellular and tissular model Red6"""
-    def __init__(self,Nx,Ny,noise=0.0):
+    def __init__(self,Nx,Ny,noise=0.0,mpi=[True,True,True,True]):
         """Model init."""
         #Generic elements
-        TissueModel.__init__(self,Nx,Ny,6,noise)
+        TissueModel.__init__(self,Nx,Ny,6,noise,mpi)
         self.Name="Red6"
         self.Gca=0.09
         self.Gk=0.064
