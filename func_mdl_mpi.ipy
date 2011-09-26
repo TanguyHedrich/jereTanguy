@@ -20,6 +20,7 @@ def myfunc(tmax):
 
     #recherche les processus "engine"
     rc = Client(profile='mpi')
+    rc.clear()
     #Cree une vue de tous les process
     view = rc[:]
 
