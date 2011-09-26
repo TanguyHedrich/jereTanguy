@@ -11,10 +11,6 @@ import numpy as np
 
 tmax = 5
 
-nbx = 3
-nby = 2
-
-
 
 def find(f, seq):
 	"""fonction qui cherche une valeur dans une liste"""
@@ -35,9 +31,24 @@ view = rc[:]
 
 #nombre de clients
 nCl = len(rc.ids)
+#diviseurs
+div = [i for i in range(1,nCl+1) if nCl%i==0]
+ldiv = len(div)
+
+if ldiv %2 == 0:
+    nbx = div[ldiv/2]
+    nby = div[ldiv/2-1]
+else:
+    nbx = nby = div[ldiv/2]
+    
 
 view.activate()
-view.block = True
+#view.block = True
+
+
+
+
+
 
 view['tmax'] = tmax
 view['nbx'] = nbx
@@ -124,6 +135,7 @@ dtMin = dt
 dtMax = 6
 dVmax = 1
 thresh = 0.01
+compt = 0
 
 time=numpy.zeros(round(tmax/(dt*decim))+1)
 Vm=numpy.zeros((m2.Nx,m2.Ny,round(tmax/(dt*decim))+1))
@@ -139,8 +151,10 @@ while (m2.time<tmax):
         m2.Istim[xyIstim2[0]:xyIstim2[1],xyIstim2[2]:xyIstim2[3]]=Ist
 
 
-    if abs(m2.diff2d(m2.Y[:,:,0]).any()) > thresh:
-        m2.derivT(dt)
+
+    m2.derivT(dt)
+
+
 #    max_dy = numpy.max(abs(m2.dY[:,:,0].all())-Ft)
 #    max_dy = MPI.COMM_WORLD.allreduce(max_dy,op=MPI.MAX)
 #    dt = dtMin*dVmax/max_dy;
@@ -148,6 +162,8 @@ while (m2.time<tmax):
 #        dt = dtMax
 #    if dt < dtMin:
 #        dt = dtMin
+
+
 
 #    #Communication x
     to_send_1 = m2.Y[1,:,0]
