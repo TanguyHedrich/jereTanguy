@@ -42,7 +42,8 @@ class TissueModel:
         self.Ra=500
         self.h=0.03
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
-        self.stimCoord=[0]
+        self.stimCoord=[]
+        self.stimCoord2=[]
         
     def __repr__(self):
         """Print model infos."""
@@ -55,7 +56,17 @@ class TissueModel:
         return Dif*(4*self.Ra*self.Cm*self.h**2)    
     def diff2d(self,Var):
         Dif=self.derivative2(Var,0)+self.derivative2(Var,1)
-        Dif[self.stimCoord]=0
+        if len(self.stimCoord) != 0:
+            for i in self.stimCoord[1]:
+                Dif[self.stimCoord[0],i]=0
+        else:
+            Dif[self.stimCoord]=0
+
+        if len(self.stimCoord2) != 0:
+            for i in self.stimCoord2[1]:
+                Dif[self.stimCoord2[0],i]=0
+        else:
+            Dif[self.stimCoord2]=0
         return Dif*2.222/16*self.mask
     def derivS(self):
         """Computes spatial derivative to get propagation."""

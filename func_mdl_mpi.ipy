@@ -115,8 +115,15 @@ def myfunc(tmax):
             xyIstim2[2:4] = [max(xyIstim2[2],y[0])-y[0],min(xyIstim2[3],y[-1])-y[0]]
 
 
+
         mpi=[(rank%nbx==0),rank%nbx==(nbx-1),(rank/nbx==0),(rank/nbx==(nby-1))]
-        m2=cell_mdl.Red3(newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),mpi=mpi)
+        mdl=cell_mdl.Red3(newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),mpi=mpi)
+
+        if xyIstim1[0] != -1:
+            mdl.stimCoord=[range(xyIstim1[0],xyIstim1[1]),range(xyIstim1[2],xyIstim1[3])]
+        if xyIstim2[0] != -1:
+            mdl.stimCoord2=[range(xyIstim2[0],xyIstim2[1]),range(xyIstim2[2],xyIstim2[3])]
+
 
         decim=20
         NbIter=0
@@ -129,24 +136,24 @@ def myfunc(tmax):
         compt = 0
 
         time=numpy.zeros(round(tmax/(dt*decim))+1)
-        Vm=numpy.zeros((m2.Nx,m2.Ny,round(tmax/(dt*decim))+1))
+        Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
     
 
-        while (m2.time<tmax):
-            Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*m2.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*m2.time/(1*tmax))
+        while (mdl.time<tmax):
+            Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
 
             if xyIstim1[0] != -1:
-                m2.Istim[xyIstim1[0]:xyIstim1[1],xyIstim1[2]:xyIstim1[3]]=Ist
+                mdl.Istim[xyIstim1[0]:xyIstim1[1],xyIstim1[2]:xyIstim1[3]]=Ist
             if xyIstim2[0] != -1:
-                m2.Istim[xyIstim2[0]:xyIstim2[1],xyIstim2[2]:xyIstim2[3]]=Ist
+                mdl.Istim[xyIstim2[0]:xyIstim2[1],xyIstim2[2]:xyIstim2[3]]=Ist
 
-            m2.derivT(dt)
+            mdl.derivT(dt)
 
         #    #Communication x
-            to_send_1 = m2.Y[1,:,0]
-            to_send_2 = m2.Y[-2,:,0]
-            to_recv_1 = m2.Y[-1,:,0]
-            to_recv_2 = m2.Y[0,:,0]
+            to_send_1 = mdl.Y[1,:,0]
+            to_send_2 = mdl.Y[-2,:,0]
+            to_recv_1 = mdl.Y[-1,:,0]
+            to_recv_2 = mdl.Y[0,:,0]
 
             if rank % 2:
                 if rank%nbx != 0:
@@ -165,14 +172,14 @@ def myfunc(tmax):
                 if rank%nbx != nbx - 1:
 	                MPI.COMM_WORLD.send(to_send_2, dest=rank+1)	
 
-            m2.Y[-1,:,0] = to_recv_1 
-            m2.Y[0,:,0] =  to_recv_2
+            mdl.Y[-1,:,0] = to_recv_1 
+            mdl.Y[0,:,0] =  to_recv_2
 
             #Communication x
-            to_send_1 = m2.Y[:,1,0]
-            to_send_2 = m2.Y[:,-2,0]
-            to_recv_1 = m2.Y[:,-1,0]
-            to_recv_2 = m2.Y[:,0,0]
+            to_send_1 = mdl.Y[:,1,0]
+            to_send_2 = mdl.Y[:,-2,0]
+            to_recv_1 = mdl.Y[:,-1,0]
+            to_recv_2 = mdl.Y[:,0,0]
 
             if rank % 2:
                 if rank/nbx != 0:
@@ -191,14 +198,14 @@ def myfunc(tmax):
                 if rank/nbx != nby - 1:
                     to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
 
-            m2.Y[:,-1,0] = to_recv_1
-            m2.Y[:,0,0] =  to_recv_2
+            mdl.Y[:,-1,0] = to_recv_1
+            mdl.Y[:,0,0] =  to_recv_2
 
-            m2.time =m2.time+dt
-            if not round(m2.time/dt)%decim:
+            mdl.time =mdl.time+dt
+            if not round(mdl.time/dt)%decim:
                 NbIter+=1
-                time[NbIter]=m2.time
-                Vm[:,:,NbIter]=m2.Y[:,:,0].copy()
+                time[NbIter]=mdl.time
+                Vm[:,:,NbIter]=mdl.Y[:,:,0].copy()
 
         Results = {'Nx':Nx,'Ny':Ny,'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
         return Results
@@ -233,4 +240,4 @@ def timing(tmax):
     for i in range(5):
         [t,v]=myfunc(tmax)
         
-%prun -Dmpixy.stats timing(500)
+%prun -Dmpixy.stats timing(5)
