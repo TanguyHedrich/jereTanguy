@@ -23,28 +23,8 @@ def myfunc(tmax):
     #Cree une vue de tous les process
     view = rc[:]
 
-    #nombre de clients
-    nCl = len(rc.ids)
-    #diviseurs
-    div = [i for i in range(1,nCl+1) if nCl%i==0]
-    ldiv = len(div)
-
-    if ldiv %2 == 0:
-        nbx = div[ldiv/2]
-        nby = div[ldiv/2-1]
-    else:
-        nbx = nby = div[ldiv/2]
-        
-
-    view.activate()
-
-    #    view['tmax'] = tmax
-    #    view['nbx'] = nbx
-    #    view['nby'] = nby
-
-
-
-    @view.remote(block=True)
+    #remote function : to be launched by the engine processes
+    @view.remote(block=False)
     def parallelcomp(tmax,nbx,nby):
      
         from mpi4py import MPI
@@ -79,7 +59,7 @@ def myfunc(tmax):
 
 	        return y,newNy
 
-#    dimension du plan
+        #    dimension du plan
         Nx=80
         Ny=120
 
@@ -91,7 +71,7 @@ def myfunc(tmax):
 
         xyIstim1 = [3,42,4,6] 
         xyIstim2 = [40,82,95,97]
-#         Coordonnees des stimuli
+        #         Coordonnees des stimuli
         if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
             xyIstim1[0:2] = [-1,-1]
         else:
@@ -124,12 +104,9 @@ def myfunc(tmax):
         dtMin = dt
         dtMax = 6
         dVmax = 1
-        thresh = 0.01
-        compt = 0
 
         time=numpy.zeros(round(tmax/(dt*decim))+1)
         Vm=numpy.zeros((m2.Nx,m2.Ny,round(tmax/(dt*decim))+1))
-    
 
         while (m2.time<tmax):
             Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*m2.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*m2.time/(1*tmax))
@@ -167,7 +144,7 @@ def myfunc(tmax):
             m2.Y[-1,:,0] = to_recv_1 
             m2.Y[0,:,0] =  to_recv_2
 
-            #Communication x
+            #Communication y
             to_send_1 = m2.Y[:,1,0]
             to_send_2 = m2.Y[:,-2,0]
             to_recv_1 = m2.Y[:,-1,0]
@@ -198,17 +175,40 @@ def myfunc(tmax):
                 NbIter+=1
                 time[NbIter]=m2.time
                 Vm[:,:,NbIter]=m2.Y[:,:,0].copy()
-        return Nx,Ny,rank,time,x,y,Vm
 
-    tabResults  =parallelcomp(tmax,nbx,nby)
+        results = {'Nx':Nx,'Ny':Ny,'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
+        return results
+
+
+
+
+    #nombre de clients
+    nCl = len(rc.ids)
+    #diviseurs
+    div = [i for i in range(1,nCl+1) if nCl%i==0]
+    ldiv = len(div)
+
+    #definition of nbx and nby
+    if ldiv %2 == 0:
+        nbx = div[ldiv/2]
+        nby = div[ldiv/2-1]
+    else:
+        nbx = nby = div[ldiv/2]
+
+
+    print 'Debut de la parallelisation...'
+    tabResults = parallelcomp(tmax,nbx,nby)
+    view.wait(tabResults)
+    print 'fin'
+
 
     tabrank = np.empty(len(tabResults))
 
-    Nx = tabResults[0][0]
-    Ny = tabResults[0][1]
-    time = tabResults[0][3]
+    Nx = tabResults[0]['Nx']
+    Ny = tabResults[0]['Ny']
+    time = tabResults[0]['time']
     for i in range(len(tabResults)):
-        tabrank[i] = tabResults[i][2]
+        tabrank[i] = tabResults[i]['rank']
 
 
 
@@ -216,9 +216,9 @@ def myfunc(tmax):
     sol_total = np.empty((Nx+4,Ny+4,len(time)))
     for i in rc.ids:
         i_client = find(i, tabrank)
-        x = tabResults[i_client][4]
-        y = tabResults[i_client][5]
-        sol_total[x[0]:x[1],y[0]:y[1],:]=np.array(tabResults[i_client][6])
+        x = tabResults[i_client]['x']
+        y = tabResults[i_client]['y']
+        sol_total[x[0]:x[1],y[0]:y[1],:]=np.array(tabResults[i_client]['Vm'])
 
     return time[:time.nonzero()[-1][-1]+1],sol_total[:time.nonzero()[-1][-1]+1]
 

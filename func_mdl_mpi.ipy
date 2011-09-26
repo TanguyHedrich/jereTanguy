@@ -44,7 +44,7 @@ def myfunc(tmax):
 
 
 
-    @view.remote()#block=True)
+    @view.remote(block=False)
     def parallelcomp(tmax,nbx,nby):
      
         from mpi4py import MPI
@@ -198,17 +198,22 @@ def myfunc(tmax):
                 NbIter+=1
                 time[NbIter]=m2.time
                 Vm[:,:,NbIter]=m2.Y[:,:,0].copy()
-        return Nx,Ny,rank,time,x,y,Vm
 
-    tabResults  =parallelcomp(tmax,nbx,nby)
+        Results = {'Nx':Nx,'Ny':Ny,'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
+        return Results
+
+    print 'Parallel computation...'
+    tabResults = parallelcomp(tmax,nbx,nby)
+    view.wait(tabResults)
+    print 'done'
 
     tabrank = np.empty(len(tabResults))
 
-    Nx = tabResults[0][0]
-    Ny = tabResults[0][1]
-    time = tabResults[0][3]
+    Nx = tabResults[0]['Nx']
+    Ny = tabResults[0]['Ny']
+    time = tabResults[0]['time']
     for i in range(len(tabResults)):
-        tabrank[i] = tabResults[i][2]
+        tabrank[i] = tabResults[i]['rank']
 
 
 
@@ -216,9 +221,9 @@ def myfunc(tmax):
     sol_total = np.empty((Nx+4,Ny+4,len(time)))
     for i in rc.ids:
         i_client = find(i, tabrank)
-        x = tabResults[i_client][4]
-        y = tabResults[i_client][5]
-        sol_total[x[0]:x[1],y[0]:y[1],:]=np.array(tabResults[i_client][6])
+        x = tabResults[i_client]['x']
+        y = tabResults[i_client]['y']
+        sol_total[x[0]:x[1],y[0]:y[1],:]=np.array(tabResults[i_client]['Vm'])
 
     return time[:time.nonzero()[-1][-1]+1],sol_total[:time.nonzero()[-1][-1]+1]
     
