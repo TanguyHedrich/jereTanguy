@@ -203,8 +203,9 @@ def myfunc(tmax):
         return Results
 
     print 'Parallel computation...'
-    tabResults = parallelcomp(tmax,nbx,nby)
-    view.wait(tabResults)
+    res = parallelcomp(tmax,nbx,nby)
+    view.wait(res)
+    tabResults = res.get()
     print 'done'
 
     tabrank = np.empty(len(tabResults))
@@ -231,4 +232,4 @@ def timing(tmax):
     for i in range(5):
         [t,v]=myfunc(tmax)
         
-%prun -Dmpixy.stats timing(500)
+%prun -Dmpixy.stats timing(5)
