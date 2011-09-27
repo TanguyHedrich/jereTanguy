@@ -1,9 +1,21 @@
-# Avant de lancer ce script, il faut lancer les processus qui tourneront en parallele :
-#
-# $ ipcluster start --n=6 --profile=mpi --engines=MPIExecEngineSetLauncher
-#
 
-def myfunc(tmax):
+def simu_euler_parallel(tmax):
+    """ Computes euler integration of model object 'mdl' until time 'tmax'. Uses parallel computing.
+
+    Syntax:
+    time,Vm = simu_euler_parallel(tmax)
+
+    Inputs:
+    tmax -- duration of the simulation (ms)
+    
+    Outputs:
+    time -- list of the time points
+    Vm -- Membrane potential (solution of the integration)
+
+    Note:
+    Engine processes should have been lauched before running this function, e.g.:
+        $ ipcluster start --n=6 --profile=mpi --engines=MPIExecEngineSetLauncher
+   """
     from mpi4py import MPI
     import cell_mdl
     from IPython.parallel import Client
@@ -11,25 +23,39 @@ def myfunc(tmax):
     import numpy as np
 
     def find(f, seq):
-        """fonction qui cherche une valeur dans une liste"""
+        """Find an element in a list
+
+        Syntax:
+        indice = find(el, list)
+
+        Inputs:
+        el -- element to find
+        list -- list of elements to investigate
+
+        Outputs
+        indice -- first indice of the element in the list
+                    returns -1 if the el cannot be found
+        """
         comp = 0
         for item in seq:
 	        if item == f: 
 		        return comp
 	        comp += 1
+        return -1
 
-    #recherche les processus "engine"
+    #find the engine processes
     rc = Client(profile='mpi')
     rc.clear()
-    #Cree une vue de tous les process
+    #Create a view of the processes
     view = rc[:]
 
-    #nombre de clients
+    #number of clients
     nCl = len(rc.ids)
-    #diviseurs
+    #divisors of nCl
     div = [i for i in range(1,nCl+1) if nCl%i==0]
     ldiv = len(div)
 
+    #the surface will be divided into nbx rows and nby columns
     if ldiv %2 == 0:
         nbx = div[ldiv/2]
         nby = div[ldiv/2-1]
@@ -37,17 +63,31 @@ def myfunc(tmax):
         nbx = nby = div[ldiv/2]
         
 
-    view.activate()
-
-    #    view['tmax'] = tmax
-    #    view['nbx'] = nbx
-    #    view['nby'] = nby
-
-
-
     @view.remote(block=False)
     def parallelcomp(tmax,nbx,nby):
-     
+        """Main function lauched by the engine processes. Compute the euler integration
+        of a block of the global surface
+
+        Syntax:
+        Results = parallelcomp(tmax,nbx,nby)
+        
+        Inputs:
+        tmax -- duration of the simulation
+        nbx -- number of rows
+        nby -- number of columns
+
+        Outputs:
+        Results -- list of the results for each process
+                An element of this list is a dictionnary containing:
+                    'Nx': Number of rows computed by this process
+                    'Ny': Number of columns
+                    'rank': rank of the process
+                    'time': list of the time points
+                    'x': indices of the first and last rows computed by this process,
+                            according the global surface
+                    'y': indices of the first and last columns
+                    'Vm': solution
+        """
         from mpi4py import MPI
         import cell_mdl
         import numpy
@@ -80,19 +120,23 @@ def myfunc(tmax):
 
 	        return y,newNy
 
-#    dimension du plan
+        #dimensions of the surgace
         Nx=80
         Ny=120
 
         rank = MPI.COMM_WORLD.Get_rank()
-        # Separation de l'axe x
+        # Which rows should I compute?
         [x,newNx] = findlimitsx(rank,nbx,Nx+4)
+
+        # What about the columns?
         [y,newNy] = findlimitsy(rank,nby,Ny+4,nbx)
 
 
+        #Stimulation (global coordinates)
         xyIstim1 = [3,42,4,6] 
         xyIstim2 = [40,82,95,97]
-#         Coordonnees des stimuli
+        
+        #computing the local coordinates
         if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
             xyIstim1[0:2] = [-1,-1]
         else:
@@ -115,10 +159,11 @@ def myfunc(tmax):
             xyIstim2[2:4] = [max(xyIstim2[2],y[0])-y[0],min(xyIstim2[3],y[-1])-y[0]]
 
 
-
+        #Creation of the model (one for each process)
         mpi=[(rank%nbx==0),rank%nbx==(nbx-1),(rank/nbx==0),(rank/nbx==(nby-1))]
         mdl=cell_mdl.Red3(newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),mpi=mpi)
 
+        #Tells the model where the stimuli are
         if xyIstim1[0] != -1:
             mdl.stimCoord=[range(xyIstim1[0],xyIstim1[1]),range(xyIstim1[2],xyIstim1[3])]
         if xyIstim2[0] != -1:
@@ -129,11 +174,9 @@ def myfunc(tmax):
         NbIter=0
         dt=0.05
         Ft = 0.15
-        dtMin = dt
-        dtMax = 6
-        dVmax = 1
-        thresh = 0.01
-        compt = 0
+#        dtMin = dt
+#        dtMax = 6
+#        dVmax = 1
 
         time=numpy.zeros(round(tmax/(dt*decim))+1)
         Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
@@ -149,7 +192,7 @@ def myfunc(tmax):
 
             mdl.derivT(dt)
 
-        #    #Communication x
+            #Communication x
             to_send_1 = mdl.Y[1,:,0]
             to_send_2 = mdl.Y[-2,:,0]
             to_recv_1 = mdl.Y[-1,:,0]
@@ -175,7 +218,7 @@ def myfunc(tmax):
             mdl.Y[-1,:,0] = to_recv_1 
             mdl.Y[0,:,0] =  to_recv_2
 
-            #Communication x
+            #Communication y
             to_send_1 = mdl.Y[:,1,0]
             to_send_2 = mdl.Y[:,-2,0]
             to_recv_1 = mdl.Y[:,-1,0]
@@ -207,26 +250,23 @@ def myfunc(tmax):
                 time[NbIter]=mdl.time
                 Vm[:,:,NbIter]=mdl.Y[:,:,0].copy()
 
-        Results = {'Nx':Nx,'Ny':Ny,'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
-        return Results
+        return {'Nx':Nx,'Ny':Ny,'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
 
     print 'Parallel computation...'
     res = parallelcomp(tmax,nbx,nby)
-    view.wait(res)
+    view.wait(res)  #wait for the results
     tabResults = res.get()
     print 'done'
-
-    tabrank = np.empty(len(tabResults))
 
     Nx = tabResults[0]['Nx']
     Ny = tabResults[0]['Ny']
     time = tabResults[0]['time']
+    tabrank = np.empty(len(tabResults))
     for i in range(len(tabResults)):
         tabrank[i] = tabResults[i]['rank']
 
 
-
-    # Concatenation des resultats
+    # Aggregation of the results
     sol_total = np.empty((Nx+4,Ny+4,len(time)))
     for i in rc.ids:
         i_client = find(i, tabrank)
@@ -238,6 +278,6 @@ def myfunc(tmax):
     
 def timing(tmax):
     for i in range(5):
-        [t,v]=myfunc(tmax)
+        [t,v]=simu_euler_parallel(tmax)
         
 %prun -Dmpixy.stats timing(5)
