@@ -24,7 +24,7 @@ def simu_euler_a(mdl,tmax):
     dtMax = 6
     dVmax = 1
     #Stim coord
-    mdl.stimCoord=[range(5,20),[5]]
+    mdl.stimCoord=[5,20,5,6]
     #Initialise storage variables
     t=numpy.zeros(round(tmax/(dt*decim))+1)
     Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))

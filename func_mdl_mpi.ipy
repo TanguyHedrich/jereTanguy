@@ -165,9 +165,9 @@ def simu_euler_parallel(tmax):
 
         #Tells the model where the stimuli are
         if xyIstim1[0] != -1:
-            mdl.stimCoord=[range(xyIstim1[0],xyIstim1[1]),range(xyIstim1[2],xyIstim1[3])]
+            mdl.stimCoord = xyIstim1
         if xyIstim2[0] != -1:
-            mdl.stimCoord2=[range(xyIstim2[0],xyIstim2[1]),range(xyIstim2[2],xyIstim2[3])]
+            mdl.stimCoord2 = xyIstim2
 
 
         decim=20
