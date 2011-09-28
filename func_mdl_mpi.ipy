@@ -123,6 +123,12 @@ def simu_euler_parallel(tmax):
         #dimensions of the surgace
         Nx=80
         Ny=120
+        # Nx should be also greater than Ny
+        flag_swap = False
+        if Nx < Ny:
+            Nx,Ny = Ny,Nx
+            flag_swap = True
+
 
         rank = MPI.COMM_WORLD.Get_rank()
         # Which rows should I compute?
@@ -249,6 +255,11 @@ def simu_euler_parallel(tmax):
                 NbIter+=1
                 time[NbIter]=mdl.time
                 Vm[:,:,NbIter]=mdl.Y[:,:,0].copy()
+
+        if flag_swap:
+            Nx,Ny = Ny,Nx
+            x,y = y,x
+            Vm = Vm.swapaxes(0,1)
 
         return {'Nx':Nx,'Ny':Ny,'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
 

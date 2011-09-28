@@ -59,6 +59,7 @@ class TissueModel:
         
         Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3]]=0
+        return Dif*2.222/16*self.mask
 
     def derivS(self):
         """Computes spatial derivative to get propagation."""
