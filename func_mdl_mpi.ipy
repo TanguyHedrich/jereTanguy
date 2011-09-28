@@ -170,9 +170,9 @@ def simu_euler_parallel(tmax):
         mdl=cell_mdl.Red3(newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),mpi=mpi)
 
         #Tells the model where the stimuli are
-        if xyIstim1[0] != -1:
+        if xyIstim1[0] != -1 and xyIstim1[2] != -1:
             mdl.stimCoord = xyIstim1
-        if xyIstim2[0] != -1:
+        if xyIstim2[0] != -1: and xyIstim2[2] != -1
             mdl.stimCoord2 = xyIstim2
 
 
@@ -191,9 +191,9 @@ def simu_euler_parallel(tmax):
         while (mdl.time<tmax):
             Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
 
-            if xyIstim1[0] != -1:
+            if xyIstim1[0] != -1 and xyIstim1[2] != -1:
                 mdl.Istim[xyIstim1[0]:xyIstim1[1],xyIstim1[2]:xyIstim1[3]]=Ist
-            if xyIstim2[0] != -1:
+            if xyIstim2[0] != -1 and xyIstim2[2] != -1:
                 mdl.Istim[xyIstim2[0]:xyIstim2[1],xyIstim2[2]:xyIstim2[3]]=Ist
 
             mdl.derivT(dt)
