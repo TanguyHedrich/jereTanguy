@@ -1,18 +1,28 @@
+"""Tissue models classes:
+Tissuemodel: Generic base class, not a functionnal model by itself.
+Red3: Uses reduced 3 vars uterine cell model (J.Laforet).
+Red6: Uses reduced 6 vars uterine cell model (S.Rihana)."""
+
 import numpy
 import pylab
 from scipy.ndimage.filters import correlate1d
 
+
 class TissueModel:
     """Generic cell and tissue model."""
-    def __init__(self,Nx,Ny,dim,noise=0.0,mpi=[True,True,True,True]):
-        """Model init."""
+    def __init__(self,dim,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
+        """Model init.
+            dim: number of variables of state vector.
+            Nx: number of cells along X.
+            Nx: number of cells along X.
+            Nx: number of cells along X.
+            noise: noise coefficient for initial state.
+            borders: boolean array [firstX,lastX,firstY,lastY,firstZ,lastZ]"""
         #dimensions
         self.Name="Generic!"
         self.Padding=4
-        [firstx,lastx,firsty,lasty] = mpi
-        self.Nx=Nx+firstx*self.Padding/2+lastx*self.Padding/2
-        self.Ny=Ny+firsty*self.Padding/2+lasty*self.Padding/2
         self.time=0
+        #Initialise state given the type of model
         if dim==3:
             Y0=[-50,0.079257,0.001]
         elif dim==6:
@@ -20,15 +30,53 @@ class TissueModel:
         else:
             Y0=numpy.zeros(dim)
         #state
-        if (Nx+Ny)>1 and (Nx*Ny):
+        if Nx*Ny*Nz:
+            #update dims with padding
+            self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
+            self.Ny=Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
+            self.Nz=Nz+borders[4]*self.Padding/2+borders[5]*self.Padding/2
+            #generate full state
+            self.Y=numpy.tile(numpy.array(Y0),(self.Nx,self.Ny,self.Nz,1))
+            #mask for padding borders  
+            self.mask=1e-4*numpy.ones(self.Y.shape[0:-1])
+            self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2,
+                      borders[2]*self.Padding/2:self.Ny-borders[3]*self.Padding/2,
+                      borders[4]*self.Padding/2:self.Nz-borders[5]*self.Padding/2
+                      ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
+                                    self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2,
+                                    self.Nz-borders[4]*self.Padding/2-borders[5]*self.Padding/2))
+            #diffusion coeffs
+            self.Dx=2.222/16
+            self.Dy=2.222/16
+            self.Dz=2.222/16
+            self.derivS=self._derivS3
+        elif Nx*Ny:
+            self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
+            self.Ny=Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
             self.Y=numpy.tile(numpy.array(Y0),(self.Nx,self.Ny,1))
             #mask for padding borders    
             self.mask=1e-4*numpy.ones(self.Y.shape[0:-1])
-            self.mask[firstx*self.Padding/2:self.Nx-lastx*self.Padding/2,firsty*self.Padding/2:self.Ny-lasty*self.Padding/2]=numpy.ones((self.Nx-firstx*self.Padding/2-lastx*self.Padding/2,self.Ny-firsty*self.Padding/2-lasty*self.Padding/2))   
-        elif (Nx+Ny)>1 and not(Nx*Ny):
-            self.Y=numpy.tile(numpy.array(Y0),(Nx+Ny,1))    
+            self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2,
+                      borders[2]*self.Padding/2:self.Ny-borders[3]*self.Padding/2
+                      ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
+                                    self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2))
+            #diffusion coeffs
+            self.Dx=2.222/16
+            self.Dy=2.222/16
+            self.derivS=self._derivS2
+        elif Nx>1:
+            self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
+            self.Y=numpy.tile(numpy.array(Y0),(self.Nx,1))
+            #mask for padding borders    
+            self.mask=1e-4*numpy.ones(self.Y.shape[0:-1])
+            self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2
+                      ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
+            #diffusion coeffs
+            self.Dx=2.222/16
+            self.derivS=self._derivS1                           
         else:
             self.Y=numpy.array(Y0)
+            self.derivS=self._derivS0
        
         #option for noisy initial state
         if noise!=0.0:
@@ -47,29 +95,36 @@ class TissueModel:
         
     def __repr__(self):
         """Print model infos."""
-        return "Model {0}, dimensions: {1}x{2}.\nCurrent state:\n{3}".format(self.Name,self.Nx,self.Ny,self.Y)   
-    def derivative2(self,inumpyut, axis, output=None, mode="reflect", cval=0.0):
+        return "Model {}, dimensions: {}.".format(self.Name,self.Y.shape)   
+    def _derivative2(self,inumpyut, axis, output=None, mode="reflect", cval=0.0):
         return correlate1d(inumpyut, [1, -2, 1], axis, output, mode, cval, 0)
     def diff1d(self,Var):
-        Dif=self.derivative2(Var,0)
-        Dif[self.Istim.nonzero()]=0
-        return Dif*(4*self.Ra*self.Cm*self.h**2)    
+        Dif=self.Dx*self._derivative2(Var,0)
+        Dif[self.stimCoord[0]:self.stimCoord[1]]=0
+        Dif[self.stimCoord2[0]:self.stimCoord2[1]]=0
+        return Dif*self.mask   
     def diff2d(self,Var):
-        Dif=self.derivative2(Var,0)+self.derivative2(Var,1)
-        
+        Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)
         Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3]]=0
-        return Dif*2.222/16*self.mask
-
-    def derivS(self):
+        return Dif*self.mask
+    def diff3d(self,Var):
+        Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)+self.Dz*self._derivative2(Var,2)
+        Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],0]=0
+        Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],0]=0
+        return Dif*self.mask    
+    def _derivS0(self):
         """Computes spatial derivative to get propagation."""
-        if self.Y.ndim==1:
-            pass
-        elif self.Y.ndim==2:
-            self.dY[...,0]+=self.diff1d(self.Y[...,0])
-        elif self.Y.ndim==3:
-            self.dY[...,0]+=self.diff2d(self.Y[...,0])
-        
+        pass
+    def _derivS1(self):
+        """Computes spatial derivative to get propagation."""
+        self.dY[...,0]+=self.diff1d(self.Y[...,0])
+    def _derivS2(self):
+        """Computes spatial derivative to get propagation."""
+        self.dY[...,0]+=self.diff2d(self.Y[...,0])
+    def _derivS3(self):
+        """Computes spatial derivative to get propagation."""
+        self.dY[...,0]+=self.diff3d(self.Y[...,0])    
     def plotstate(self):
         """Plot state of the model with the suitable method, according its dimensions."""
         if self.Y.ndim==1:
@@ -94,15 +149,17 @@ class TissueModel:
             pylab.colorbar()
             pylab.title('[Ca]')
             #pylab.show()
+        elif self.Y.ndim==4:
+            print "Display of 2.5D models currrently unsupported."
         else:
             print "Uncompatible model dimensions for plotting."
 
 class Red3(TissueModel):
     """Cellular and tissular model Red3"""
-    def __init__(self,Nx,Ny,noise=0.0,mpi=[True,True,True,True]):
+    def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init."""
         #Generic elements
-        TissueModel.__init__(self,Nx,Ny,3,noise,mpi)
+        TissueModel.__init__(self,3,Nx,Ny,Nz,noise,borders)
         self.Name="Red3"
         self.Gk=0.064
         self.Gkca=0.08
@@ -147,10 +204,10 @@ class Red3(TissueModel):
         
 class Red6(TissueModel):
     """Cellular and tissular model Red6"""
-    def __init__(self,Nx,Ny,noise=0.0,mpi=[True,True,True,True]):
+    def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init."""
         #Generic elements
-        TissueModel.__init__(self,Nx,Ny,6,noise,mpi)
+        TissueModel.__init__(self,6,Nx,Ny,Nz,noise,borders)
         self.Name="Red6"
         self.Gca=0.09
         self.Gk=0.064

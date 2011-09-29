@@ -6,10 +6,10 @@ import numpy
 import pylab
 
 #create model objects of the two type
-#m3=cell_mdl.Red3(80,120)
+m3=cell_mdl.Red3(80,120,10)
 #m6=cell_mdl.Red6(30,50)
 #define max simulation time 
-tmax=500
+tmax=5
 
 
 def simu_euler_a(mdl,tmax):
@@ -27,7 +27,14 @@ def simu_euler_a(mdl,tmax):
     mdl.stimCoord=[5,20,5,6]
     #Initialise storage variables
     t=numpy.zeros(round(tmax/(dt*decim))+1)
-    Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
+    if mdl.Y.ndim==4:
+        Vm=numpy.zeros((mdl.Nx,mdl.Ny,mdl.Nz,round(tmax/(dt*decim))+1))
+    elif mdl.Y.ndim==3:
+        Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
+    elif mdl.Y.ndim==2:
+        Vm=numpy.zeros((mdl.Nx,round(tmax/(dt*decim))+1))
+    else:
+        Vm=numpy.zeros((round(tmax/(dt*decim))+1))
     #Integration
     while mdl.time<tmax:
         Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
@@ -54,10 +61,10 @@ def timing(tmax):
         mdl=cell_mdl.Red3(80,120)
         [t,v]=simu_euler_a(mdl,tmax)
         
-%prun -Dserial2.stats timing(500)
+#%prun -Dserial2.stats timing(500)
 
 # %prun magic is used for profiling with IPython
-#%time [t,Vm]=simu_euler_a(m3,tmax)
+%time [t,Vm]=simu_euler_a(m3,tmax)
 #%prun simu_euler_a(m6,100)
 #logY=open('Yv%d-%d_1S.npz'% (m3.Nx,m3.Ny),'w')
 #numpy.savez(logY,t=t[:t.nonzero()[-1][-1]+1],Y=Vm[:t.nonzero()[-1][-1]+1])
