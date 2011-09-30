@@ -49,6 +49,7 @@ class TissueModel:
             self.Dx=2.222/16
             self.Dy=2.222/16
             self.Dz=2.222/16
+            self.varlist.extend(['Dx','Dy','Dz'])
             self.derivS=self._derivS3
         elif Nx*Ny:
             self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
@@ -63,6 +64,7 @@ class TissueModel:
             #diffusion coeffs
             self.Dx=2.222/16
             self.Dy=2.222/16
+            self.varlist.extend(['Dx','Dy'])
             self.derivS=self._derivS2
         elif Nx>1:
             self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
@@ -73,6 +75,7 @@ class TissueModel:
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
             #diffusion coeffs
             self.Dx=2.222/16
+            self.varlist.append('Dx')
             self.derivS=self._derivS1                           
         else:
             self.Y=numpy.array(Y0)
@@ -92,6 +95,15 @@ class TissueModel:
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
         self.stimCoord=[0,0,0,0]
         self.stimCoord2=[0,0,0,0]
+        self.varlist.extend(['R','T','F','Cm','Ra','h'])
+        
+    def copyparams(self,mdl):
+        """Retrieves parmeters from 'mdl'."""
+        if self.Name!=mdl.Name:
+            print "Can't copy from different model type."
+        else:
+            for var in mdl.varlist:
+                self.__dict__[var]=mdl.__dict__[var]
         
     def __repr__(self):
         """Print model infos."""
@@ -158,8 +170,10 @@ class Red3(TissueModel):
     """Cellular and tissular model Red3"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init."""
+        self.varlist=['Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Gca2','vca2','Rca','Jbase']
         #Generic elements
         TissueModel.__init__(self,3,Nx,Ny,Nz,noise,borders)
+        #Default Parameters
         self.Name="Red3"
         self.Gk=0.064
         self.Gkca=0.08
@@ -206,8 +220,10 @@ class Red6(TissueModel):
     """Cellular and tissular model Red6"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init."""
+        self.varlist=['Gca','Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek']
         #Generic elements
         TissueModel.__init__(self,6,Nx,Ny,Nz,noise,borders)
+        #Default Parameters
         self.Name="Red6"
         self.Gca=0.09
         self.Gk=0.064
@@ -219,10 +235,6 @@ class Red6(TissueModel):
         self.Kca=0.01
         self.El=-20
         self.Ek=-83
-        self.Gca2=-0.02694061
-        self.vca2=-20.07451779
-        self.Rca=5.97139101
-        self.Jbase=0.02397327
         self.dY=numpy.empty(self.Y.shape)
         #self.Istim[5:20,5]=0.2
         
