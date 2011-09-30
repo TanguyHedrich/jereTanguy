@@ -323,15 +323,14 @@ class IntSerial(IntGen):
         dVmax = 1
 
         self.t=numpy.zeros(round(tmax/(dt*decim))+1)
-        try: self.mdl.Nz
-        except NameError:
-                try: self.mdl.Ny
-                except NameError:
-                    self.Vm = numpy.empty((Nx+4,len(self.t)))
-                else:
-                    self.Vm = numpy.empty((Nx+4,Ny+4,len(self.t)))
-        else:
-            self.Vm = numpy.empty((Nx+mdl.Padding,Ny+mdl.Padding,Nz+mdl.Padding,len(self.t)))
+        
+        if self.mdl.Y.ndim == 2:
+            self.Vm = numpy.empty((self.mdl.Nx,len(self.t)))
+        elif self.mdl.Y.ndim == 3:
+            self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,len(self.t)))
+        elif self.mdl.Y.ndim == 4:
+            self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,len(self.t)))
+
 
         #Integration
         while self.mdl.time<tmax:
@@ -413,6 +412,16 @@ class IntPara(IntGen):
                     y[1] = y[0] + newNy
                 return y,newNy
 
+            #Stimulation (global coordinates)
+            xyIstim1 = [3,42,4,6] 
+            xyIstim2 = [40,82,95,97]
+
+            flag_swap = False
+            if Nx < Ny:
+                Nx,Ny = Ny,Nx
+                flag_swap = True
+                xyIstim1[0:2],xyIstim1[2:4] = xyIstim1[0:2],xyIstim1[2:4]
+                xyIstim2[0:2],xyIstim2[2:4] = xyIstim2[0:2],xyIstim2[2:4]
 
             rank = MPI.COMM_WORLD.Get_rank()
             # Which rows should I compute?
@@ -423,9 +432,7 @@ class IntPara(IntGen):
                 [y,newNy] = findlimitsy(rank,nby,Ny+4,nbx)
 
 
-            #Stimulation (global coordinates)
-            xyIstim1 = [3,42,4,6] 
-            xyIstim2 = [40,82,95,97]
+
             
             #computing the local coordinates
             if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
@@ -628,7 +635,11 @@ class IntPara(IntGen):
                         Vm[:,:,NbIter]=mdl.Y[:,:,0].copy()
                     elif Nx:
                         Vm[:,NbIter]=mdl.Y[:,0].copy()
-
+    
+            if flag_swap:
+                Nx,Ny = Ny,Nx
+                x,y = y,x
+                Vm = Vm.swapaxes(0,1)
 
             return {'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
 
@@ -658,12 +669,14 @@ class IntPara(IntGen):
             return -1
 
         # Aggregation of the results
-        if Nx*Ny*Nz:
-            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,Nz+self.mdl.Padding,len(self.t)))
-        elif Nx*Ny:
-            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,len(self.t)))
-        elif Nx:
+
+        if self.mdl.Y.ndim == 2:
             self.Vm = numpy.empty((Nx+self.mdl.Padding,len(self.t)))
+        elif self.mdl.Y.ndim == 3:
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,len(self.t)))
+        elif self.mdl.Y.ndim == 4:
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,Nz+self.mdl.Padding,len(self.t)))
+            
 
         for i in range(len(tabrank)):
             i_client = find(i, tabrank)
