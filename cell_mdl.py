@@ -104,7 +104,18 @@ class TissueModel:
         else:
             for var in mdl.varlist:
                 self.__dict__[var]=mdl.__dict__[var]
-        
+
+    def getlistparams(self):
+        dictparam = {}
+        for var in self.varlist:
+            dictparam[var]=self.__dict__[var]
+        return dictparam
+
+    def setlistparams(self,dictparam):
+        for var in dictparam:
+            self.__dict__[var]=dictparam[var]
+
+    
     def __repr__(self):
         """Print model infos."""
         return "Model {}, dimensions: {}.".format(self.Name,self.Y.shape)   
@@ -170,7 +181,7 @@ class Red3(TissueModel):
     """Cellular and tissular model Red3"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init."""
-        self.varlist=['Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Gca2','vca2','Rca','Jbase']
+        self.varlist=['Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Gca2','vca2','Rca','Jbase','Name']
         #Generic elements
         TissueModel.__init__(self,3,Nx,Ny,Nz,noise,borders)
         #Default Parameters
@@ -220,7 +231,7 @@ class Red6(TissueModel):
     """Cellular and tissular model Red6"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init."""
-        self.varlist=['Gca','Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek']
+        self.varlist=['Gca','Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Name']
         #Generic elements
         TissueModel.__init__(self,6,Nx,Ny,Nz,noise,borders)
         #Default Parameters
@@ -286,16 +297,67 @@ class Red6(TissueModel):
         self.Y+=self.dY*dt
         
 
-class temporal_mdl(Red3,Red6):
-    def __init__(self,noise=0.0,mpi=False,model='Red3'):
-        """Model init."""
-        #Generic elements
-        self.mpi = mpi
-        self.model = model
-        if mpi:
-            self.mpi_init()
+
+
+
+class IntGen():
+    def __init__(self,mdl):
+        self.mdl = mdl
         
-    def mpi_init(self):
+    def save(self,filename):
+        logY=open(filename,'w')
+        numpy.savez(logY,t=self.t,Y=self.Vm)
+        logY.close()
+
+class IntSerial(IntGen):
+    def __init__(self,mdl):
+        IntGen.__init__(self,mdl)
+
+    def compute(self,tmax=500,stimCoord=[0,0,0,0],stimCoord2=[0,0,0,0]):
+        decim=10
+        NbIter=0
+        dt=0.05
+        Ft = 0.15
+        dtMin = dt
+        dtMax = 6
+        dVmax = 1
+
+        self.t=numpy.zeros(round(tmax/(dt*decim))+1)
+        try: self.mdl.Nz
+        except NameError:
+                try: self.mdl.Ny
+                except NameError:
+                    self.Vm = numpy.empty((Nx+4,len(self.t)))
+                else:
+                    self.Vm = numpy.empty((Nx+4,Ny+4,len(self.t)))
+        else:
+            self.Vm = numpy.empty((Nx+mdl.Padding,Ny+mdl.Padding,Nz+mdl.Padding,len(self.t)))
+
+        #Integration
+        while self.mdl.time<tmax:
+            Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax))
+            self.mdl.Istim[stimCoord]=Ist
+            self.mdl.Istim[stimCoord2]=Ist
+           # mdl.Istim[50:95,100]=Ist
+            self.mdl.derivT(dt)
+            #define new time step
+            dt = dtMin*dVmax/numpy.max(abs(self.mdl.dY[...,0].all())-Ft);
+            if dt > dtMax:
+                dt = dtMax
+            if dt < dtMin:
+                dt = dtMin
+            self.mdl.time+=dt
+            #stores time and state 
+            if not round(self.mdl.time/dt)%decim:
+                NbIter+=1
+                self.t[NbIter]=self.mdl.time
+                self.Vm[...,NbIter]=self.mdl.Y[...,0].copy()
+        return self.t,self.Vm
+
+class IntPara(IntGen):
+
+    def __init__(self,mdl):
+        IntGen.__init__(self,mdl)
         #find the engine processes
         rc = Client(profile='mpi')
         rc.clear()
@@ -316,81 +378,13 @@ class temporal_mdl(Red3,Red6):
             self.nbx = self.nby = div[ldiv/2]
 
 
+    def compute(self,tmax=500,stimCoord=[0,0,0,0],stimCoord2=[0,0,0,0]):
 
-    def compute(self,tmax,Nx,Ny=0,Nz=0,stimCoord=[0,0,0,0],stimCoord2=[0,0,0,0]):
-        if self.mpi:
-            self.compute_mpi(tmax,Nx,Ny,Nz,stimCoord,stimCoord2)
-        else:
-            self.compute_serial(tmax,Nx,Ny,Nz,stimCoord,stimCoord2)
-
-    def compute_serial(self,tmax,Nx,Ny,Nz,stimCoord,stimCoord2):
-        if self.model == 'Red3':
-           Red3.__init__(self,Nx,Ny,Nz) 
-        elif self.model == 'Red6':
-           Red6.__init__(self,Nx,Ny,Nz)
-
-        self.stimCoord = stimCoord
-        self.stimCoord = stimCoord2
-
-        decim=10
-        NbIter=0
-        dt=0.05
-        Ft = 0.15
-        dtMin = dt
-        dtMax = 6
-        dVmax = 1
-
-        #Initialise storage variables
-        self.t=numpy.zeros(round(tmax/(dt*decim))+1)
-        self.Vm=numpy.zeros((Nx+4,Ny+4,Nz+4,round(tmax/(dt*decim))+1))
-        #Integration
-        while self.time<tmax:
-            Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*self.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.time/(1*tmax))
-            self.Istim[self.stimCoord]=Ist
-           # mdl.Istim[50:95,100]=Ist
-            self.derivT(dt)
-            #define new time step
-            dt = dtMin*dVmax/numpy.max(abs(self.dY[...,0].all())-Ft);
-            if dt > dtMax:
-                dt = dtMax
-            if dt < dtMin:
-                dt = dtMin
-            self.time+=dt
-            #stores time and state 
-            if not round(self.time/dt)%decim:
-                NbIter+=1
-                self.t[NbIter]=self.time
-                self.Vm[...,NbIter]=self.Y[...,0].copy()
-
-    def compute_mpi(self,tmax,Nx,Ny,Nz,stimCoord,stimCoord2):
-
-        def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,model):
-            """Main function lauched by the engine processes. Compute the euler integration
-            of a block of the global surface
-
-            Syntax:
-            Results = parallelcomp(tmax,nbx,nby)
-            
-            Inputs:
-            tmax -- duration of the simulation
-            nbx -- number of rows
-            nby -- number of columns
-
-            Outputs:
-            Results -- list of the results for each process
-                    An element of this list is a dictionnary containing:
-                        'Nx': Number of rows computed by this process
-                        'Ny': Number of columns
-                        'rank': rank of the process
-                        'time': list of the time points
-                        'x': indices of the first and last rows computed by this process,
-                                according the global surface
-                        'y': indices of the first and last columns
-                        'Vm': solution
-            """
+        def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam):
             from mpi4py import MPI
             import cell_mdl
             import numpy
+
 
             def findlimitsx(rank,nbx,Nx):
                 newNx = round( (Nx + (nbx-1) * 2) / (nbx) )
@@ -419,43 +413,14 @@ class temporal_mdl(Red3,Red6):
                     y[1] = y[0] + newNy
                 return y,newNy
 
-#            def comm(to_send1,to_send2,bools):
-#                from mpi4py import MPI
-#                pair,first,last = bools
-#                if pair:
-#                    if first:
-#                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
-#                    if last:
-#                        pass
-#                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
-#                        MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
-#                    if first:
-#                        pass
-#                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
-#                else:
-#                    if last:
-#                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
-#                    if first:
-#                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
-#                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
-#                    if last:
-#                        MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
-#                return to_recv1,to_recv2
-
-            #dimensions of the surgace
-            # Nx should be also greater than Ny
-#                flag_swap = False
-#                if Nx < Ny:
-#                    Nx,Ny = Ny,Nx
-#                    flag_swap = True
-
 
             rank = MPI.COMM_WORLD.Get_rank()
             # Which rows should I compute?
             [x,newNx] = findlimitsx(rank,nbx,Nx+4)
 
             # What about the columns?
-            [y,newNy] = findlimitsy(rank,nby,Ny+4,nbx)
+            if Ny:
+                [y,newNy] = findlimitsy(rank,nby,Ny+4,nbx)
 
 
             #Stimulation (global coordinates)
@@ -487,10 +452,12 @@ class temporal_mdl(Red3,Red6):
 
             #Creation of the model (one for each process)
             mpi=[(rank%nbx==0),rank%nbx==(nbx-1),(rank/nbx==0),(rank/nbx==(nby-1)),True,True]
-            if model == 'Red6':
-                mdl=cell_mdl.Red6(Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),Nz=Nz,borders=mpi)
-            elif model == 'Red3':
+            if listparam['Name'] == 'Red6':
+                mdl=cell_mdl.Red6(Nx = newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny = newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),Nz=Nz,borders=mpi)
+            elif listparam['Name'] == 'Red3':
                 mdl=cell_mdl.Red3(Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),Nz=Nz,borders=mpi)
+            mdl.setlistparams(listparam)
+            mdl.Name += 'p'
 
             #Tells the model where the stimuli are
             if xyIstim1[0] != -1 and xyIstim1[2] != -1:
@@ -551,8 +518,8 @@ class temporal_mdl(Red3,Red6):
                     mdl.Y[0,:,:,0] =  to_recv_2
 
                     #Communication y
-                    to_send_1 = mdl.Y[:,1,:,0]
-                    to_send_2 = mdl.Y[:,-2,:,0]
+                    to_send_1 = mdl.Y[:,0,:,0]
+                    to_send_2 = mdl.Y[:,-1,:,0]
                     to_recv_1 = mdl.Y[:,-1,:,0]
                     to_recv_2 = mdl.Y[:,0,:,0]
 
@@ -575,9 +542,6 @@ class temporal_mdl(Red3,Red6):
 
                     mdl.Y[:,-1,:,0] = to_recv_1
                     mdl.Y[:,0,:,0] =  to_recv_2
-
-
-
 
                 elif Nx*Ny:
                     to_send_1 = mdl.Y[0,:,0]
@@ -606,8 +570,8 @@ class temporal_mdl(Red3,Red6):
                     mdl.Y[0,:,0] =  to_recv_2
 
                     #Communication y
-                    to_send_1 = mdl.Y[:,1,0]
-                    to_send_2 = mdl.Y[:,-2,0]
+                    to_send_1 = mdl.Y[:,0,0]
+                    to_send_2 = mdl.Y[:,-1,0]
                     to_recv_1 = mdl.Y[:,-1,0]
                     to_recv_2 = mdl.Y[:,0,0]
 
@@ -630,8 +594,6 @@ class temporal_mdl(Red3,Red6):
 
                     mdl.Y[:,-1,0] = to_recv_1
                     mdl.Y[:,0,0] =  to_recv_2
-
-
 
                 elif Nx:
                     to_send1,to_send2 = mdl.Y[0,0],mdl.Y[-1,0]
@@ -670,10 +632,15 @@ class temporal_mdl(Red3,Red6):
 
             return {'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
 
+        try: Nz = self.mdl.Nz
+        except: Nz = 0
 
+        try: Ny = self.mdl.Ny
+        except: Ny = 0
 
+        Nx = self.mdl.Nx
 
-        res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.model)
+        res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams())
         self.view.wait(res)  #wait for the results
         tabResults = res.get()
 
@@ -692,11 +659,11 @@ class temporal_mdl(Red3,Red6):
 
         # Aggregation of the results
         if Nx*Ny*Nz:
-            self.Vm = numpy.empty((Nx+4,Ny+4,Nz+4,len(self.t)))
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,Nz+self.mdl.Padding,len(self.t)))
         elif Nx*Ny:
-            self.Vm = numpy.empty((Nx+4,Ny+4,len(self.t)))
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,len(self.t)))
         elif Nx:
-            self.Vm = numpy.empty((Nx+4,len(self.t)))
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,len(self.t)))
 
         for i in range(len(tabrank)):
             i_client = find(i, tabrank)
@@ -704,3 +671,4 @@ class temporal_mdl(Red3,Red6):
             y = tabResults[i_client]['y']
             self.Vm[x[0]:x[1],y[0]:y[1],...]=numpy.array(tabResults[i_client]['Vm'])
 
+        return self.t,self.Vm
