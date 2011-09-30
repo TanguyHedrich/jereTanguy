@@ -175,14 +175,16 @@ def simu_euler_parallel(tmax):
         if xyIstim2[0] != -1 and xyIstim2[2] != -1:
             mdl.stimCoord2 = xyIstim2
 
-
-        decim=20
+#       test
+        mdl.Dy*=1.2
+#        
+        decim=50
         NbIter=0
         dt=0.05
         Ft = 0.15
-#        dtMin = dt
-#        dtMax = 6
-#        dVmax = 1
+        #dtMin = dt
+        #dtMax = 6
+        #dVmax = 1
 
         time=numpy.zeros(round(tmax/(dt*decim))+1)
         Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
@@ -225,8 +227,8 @@ def simu_euler_parallel(tmax):
             mdl.Y[0,:,0] =  to_recv_2
 
             #Communication y
-            to_send_1 = mdl.Y[:,1,0]
-            to_send_2 = mdl.Y[:,-2,0]
+            to_send_1 = mdl.Y[:,0,0]
+            to_send_2 = mdl.Y[:,-1,0]
             to_recv_1 = mdl.Y[:,-1,0]
             to_recv_2 = mdl.Y[:,0,0]
 
@@ -291,9 +293,9 @@ def timing(tmax):
     for i in range(5):
         [t,v]=simu_euler_parallel(tmax)
         
-tmax=4000        
+tmax=2000        
 #%prun -Dmpixy.stats timing(5)
 %time [t,Vm]=simu_euler_parallel(tmax)
-logY=open('Yv%d-%d_1P-%d.npz'% (80,120,tmax),'w')
+logY=open('Yv%d-%d_1Pa-%d.npz'% (80,120,tmax),'w')
 numpy.savez(logY,t=t,Y=Vm)
 logY.close()
