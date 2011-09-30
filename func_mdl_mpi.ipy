@@ -1,4 +1,4 @@
-
+import numpy
 def simu_euler_parallel(tmax):
     """ Computes euler integration of model object 'mdl' until time 'tmax'. Uses parallel computing.
 
@@ -166,13 +166,13 @@ def simu_euler_parallel(tmax):
 
 
         #Creation of the model (one for each process)
-        mpi=[(rank%nbx==0),rank%nbx==(nbx-1),(rank/nbx==0),(rank/nbx==(nby-1))]
-        mdl=cell_mdl.Red3(newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),mpi=mpi)
+        mpi=[(rank%nbx==0),rank%nbx==(nbx-1),(rank/nbx==0),(rank/nbx==(nby-1)),True,True]
+        mdl=cell_mdl.Red3(newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),borders=mpi)
 
         #Tells the model where the stimuli are
         if xyIstim1[0] != -1 and xyIstim1[2] != -1:
             mdl.stimCoord = xyIstim1
-        if xyIstim2[0] != -1: and xyIstim2[2] != -1
+        if xyIstim2[0] != -1 and xyIstim2[2] != -1:
             mdl.stimCoord2 = xyIstim2
 
 
@@ -199,8 +199,8 @@ def simu_euler_parallel(tmax):
             mdl.derivT(dt)
 
             #Communication x
-            to_send_1 = mdl.Y[1,:,0]
-            to_send_2 = mdl.Y[-2,:,0]
+            to_send_1 = mdl.Y[0,:,0]
+            to_send_2 = mdl.Y[-1,:,0]
             to_recv_1 = mdl.Y[-1,:,0]
             to_recv_2 = mdl.Y[0,:,0]
 
@@ -291,4 +291,9 @@ def timing(tmax):
     for i in range(5):
         [t,v]=simu_euler_parallel(tmax)
         
-%prun -Dmpixy.stats timing(5)
+tmax=4000        
+#%prun -Dmpixy.stats timing(5)
+%time [t,Vm]=simu_euler_parallel(tmax)
+logY=open('Yv%d-%d_1P-%d.npz'% (80,120,tmax),'w')
+numpy.savez(logY,t=t,Y=Vm)
+logY.close()
