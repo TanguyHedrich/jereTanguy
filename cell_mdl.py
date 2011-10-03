@@ -31,11 +31,11 @@ class TissueModel:
         else:
             Y0=numpy.zeros(dim)
         #parameters
-        self.Cm=1
-        self.Ra=500
-        self.hx=0.03
-        self.hy=0.03
-        self.hz=0.03
+        self._Cm=1
+        self._Ra=500
+        self._hx=0.03
+        self._hy=0.03
+        self._hz=0.03
         #state
         if Nx*Ny*Nz:
             #update dims with padding
@@ -53,9 +53,9 @@ class TissueModel:
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2,
                                     self.Nz-borders[4]*self.Padding/2-borders[5]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
-            self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
-            self.Dz=1/(16*self.Ra*self.Cm*self.hz**2)
+            self.Dx=1/(16*self._Ra*self._Cm*self._hx**2)
+            self.Dy=1/(16*self._Ra*self._Cm*self._hy**2)
+            self.Dz=1/(16*self._Ra*self._Cm*self._hz**2)
             self.varlist.extend(['Dx','Dy','Dz'])
             self.derivS=self._derivS3
         elif Nx*Ny:
@@ -69,8 +69,8 @@ class TissueModel:
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
-            self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
+            self.Dx=1/(16*self._Ra*self._Cm*self._hx**2)
+            self.Dy=1/(16*self._Ra*self._Cm*self._hy**2)
             self.varlist.extend(['Dx','Dy'])
             self.derivS=self._derivS2
         elif Nx>1:
@@ -81,7 +81,7 @@ class TissueModel:
             self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
             #diffusion coeffs
-            self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
+            self.Dx=1/(16*self._Ra*self._Cm*self._hx**2)
             self.varlist.append('Dx')
             self.derivS=self._derivS1                           
         else:
@@ -94,7 +94,7 @@ class TissueModel:
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
         self.stimCoord=[0,0,0,0]
         self.stimCoord2=[0,0,0,0]
-        self.varlist.extend(['R','T','F','Cm','Ra','hx','hy','hz'])
+        self.varlist.extend(['R','T','F','_Cm','_Ra','_hx','_hy','_hz'])
         #option for noisy initial state
         if noise!=0.0:
             self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise    
@@ -108,29 +108,46 @@ class TissueModel:
             for var in mdl.varlist:
                 self.__dict__[var]=mdl.__dict__[var]
 
-    def sethx(self,hx):
+
+    def _get_hx(self):
+        return self._hx
+    def _set_hx(self,hx):
         self.hx = hx
         self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
 
-    def sethy(self,hy):
+    hx = property(fget=_get_hx,fset=_set_hx)
+
+    def _get_hy(self):
+        return self._hy
+    def _set_hy(self,hy):
         self.hy = hy
         self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
+    hy = property(fget=_get_hy,fset=_set_hy)
 
-    def sethz(self,hz):
+    def _get_hz(self):
+        return self._hz
+    def _set_hz(self,hz):
         self.hz = hz
         self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
+    hz = property(fget=_get_hz,fset=_set_hz)
 
-    def setCm(self,Cm):
+    def _get_Cm(self):
+        return self._Cm
+    def _set_Cm(self,Cm):
         self.Cm= Cm
         self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
         self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
         self.Dz=1/(16*self.Ra*self.Cm*self.hz**2)
+    Cm = property(fget=_get_Cm,fset=_set_Cm)
         
-    def setRa(self,Ra):
+    def _get_Ra(self):
+        return self._Ra
+    def _set_Ra(self,Ra):
         self.Ra= Ra
         self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
         self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
         self.Dz=1/(16*self.Ra*self.Cm*self.hz**2)
+    Ra = property(fget=_get_Ra,fset=_set_Ra)
 
     def getlistparams(self):
         dictparam = {}
@@ -337,25 +354,31 @@ class IntGen():
         logY.close()
 
     def show(self):
-        vv =self.Vm.reshape((self.Vm.shape[0]*self.Vm.shape[1],self.Vm.shape[2]))
-        pylab.imshow(vv,aspect='auto',cmap=cm.jet)
-        pylab.show()
+        if self.Vm.ndim == 2:
+            pylab.imshow(self.Vm,aspect='auto',cmap=cm.jet)
+            pylab.show()
+        elif self.Vm.ndim == 3:
+            pass
+        elif self.Vm.ndim == 4:
+            pass
+ 
 
 class IntSerial(IntGen):
     def __init__(self,mdl):
         IntGen.__init__(self,mdl)
 
     def compute(self,tmax=500,stimCoord=[0,0,0,0],stimCoord2=[0,0,0,0]):
-        decim=10
+        self.decim=10
         NbIter=0
-        dt=0.05
+        self.dt=0.05
         Ft = 0.15
-        dtMin = dt
+        dtMin = self.dt
         dtMax = 6
         dVmax = 1
 
-        self.t=numpy.zeros(round(tmax/(dt*decim))+1)
+        self.t=numpy.zeros(round(tmax/(self.dt*self.decim))+1)
         
+
         if self.mdl.Y.ndim == 2:
             self.Vm = numpy.empty((self.mdl.Nx,len(self.t)))
         elif self.mdl.Y.ndim == 3:
@@ -363,23 +386,22 @@ class IntSerial(IntGen):
         elif self.mdl.Y.ndim == 4:
             self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,len(self.t)))
 
-
         #Integration
         while self.mdl.time<tmax:
             Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax))
             self.mdl.Istim[stimCoord]=Ist
             self.mdl.Istim[stimCoord2]=Ist
            # mdl.Istim[50:95,100]=Ist
-            self.mdl.derivT(dt)
+            self.mdl.derivT(self.dt)
             #define new time step
-            dt = dtMin*dVmax/numpy.max(abs(self.mdl.dY[...,0].all())-Ft);
-            if dt > dtMax:
-                dt = dtMax
-            if dt < dtMin:
-                dt = dtMin
-            self.mdl.time+=dt
+            self.dt = dtMin*dVmax/numpy.max(abs(self.mdl.dY[...,0].all())-Ft);
+            if self.dt > dtMax:
+                self.dt = dtMax
+            if self.dt < dtMin:
+                self.dt = dtMin
+            self.mdl.time+=self.dt
             #stores time and state 
-            if not round(self.mdl.time/dt)%decim:
+            if not round(self.mdl.time/self.dt)%self.decim:
                 NbIter+=1
                 self.t[NbIter]=self.mdl.time
                 self.Vm[...,NbIter]=self.mdl.Y[...,0].copy()
@@ -416,7 +438,6 @@ class IntPara(IntGen):
             import cell_mdl
             import numpy
 
-
             def findlimitsx(rank,nbx,Nx):
                 newNx = round( (Nx + (nbx-1) * 2) / (nbx) )
                 x = [0,0]
@@ -444,16 +465,6 @@ class IntPara(IntGen):
                     y[1] = y[0] + newNy
                 return y,newNy
 
-            #Stimulation (global coordinates)
-            xyIstim1 = [3,42,4,6] 
-            xyIstim2 = [40,82,95,97]
-
-            flag_swap = False
-            if Nx < Ny:
-                Nx,Ny = Ny,Nx
-                flag_swap = True
-                xyIstim1[0:2],xyIstim1[2:4] = xyIstim1[0:2],xyIstim1[2:4]
-                xyIstim2[0:2],xyIstim2[2:4] = xyIstim2[0:2],xyIstim2[2:4]
 
             rank = MPI.COMM_WORLD.Get_rank()
             # Which rows should I compute?
@@ -464,7 +475,9 @@ class IntPara(IntGen):
                 [y,newNy] = findlimitsy(rank,nby,Ny+4,nbx)
 
 
-
+            #Stimulation (global coordinates)
+            xyIstim1 = [3,42,4,6] 
+            xyIstim2 = [40,82,95,97]
             
             #computing the local coordinates
             if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
@@ -657,7 +670,7 @@ class IntPara(IntGen):
 
 
 
-                mdl.time =mdl.time+dt
+                mdl.time +=dt
                 if not round(mdl.time/dt)%decim:
                     NbIter+=1
                     time[NbIter]=mdl.time
@@ -667,11 +680,6 @@ class IntPara(IntGen):
                         Vm[:,:,NbIter]=mdl.Y[:,:,0].copy()
                     elif Nx:
                         Vm[:,NbIter]=mdl.Y[:,0].copy()
-    
-            if flag_swap:
-                Nx,Ny = Ny,Nx
-                x,y = y,x
-                Vm = Vm.swapaxes(0,1)
 
             return {'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
 
@@ -695,20 +703,18 @@ class IntPara(IntGen):
         def find(f, seq):
             comp = 0
             for item in seq:
-	            if item == f: 
-		            return comp
-	            comp += 1
+                if item == f: 
+	                return comp
+                comp += 1
             return -1
 
         # Aggregation of the results
-
-        if self.mdl.Y.ndim == 2:
-            self.Vm = numpy.empty((Nx+self.mdl.Padding,len(self.t)))
-        elif self.mdl.Y.ndim == 3:
-            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,len(self.t)))
-        elif self.mdl.Y.ndim == 4:
+        if Nx*Ny*Nz:
             self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,Nz+self.mdl.Padding,len(self.t)))
-            
+        elif Nx*Ny:
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,len(self.t)))
+        elif Nx:
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,len(self.t)))
 
         for i in range(len(tabrank)):
             i_client = find(i, tabrank)
