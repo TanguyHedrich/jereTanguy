@@ -5,6 +5,7 @@ Red6: Uses reduced 6 vars uterine cell model (S.Rihana)."""
 
 import numpy
 import pylab
+import matplotlib.cm as cm
 from scipy.ndimage.filters import correlate1d
 from IPython.parallel import Client
 
@@ -29,6 +30,12 @@ class TissueModel:
             Y0=[-50,0.0015709,0.8,0.8,0.079257,0.001]
         else:
             Y0=numpy.zeros(dim)
+        #parameters
+        self.Cm=1
+        self.Ra=500
+        self.hx=0.03
+        self.hy=0.03
+        self.hz=0.03
         #state
         if Nx*Ny*Nz:
             #update dims with padding
@@ -46,9 +53,9 @@ class TissueModel:
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2,
                                     self.Nz-borders[4]*self.Padding/2-borders[5]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=2.222/16
-            self.Dy=2.222/16
-            self.Dz=2.222/16
+            self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
+            self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
+            self.Dz=1/(16*self.Ra*self.Cm*self.hz**2)
             self.varlist.extend(['Dx','Dy','Dz'])
             self.derivS=self._derivS3
         elif Nx*Ny:
@@ -62,8 +69,8 @@ class TissueModel:
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=2.222/16
-            self.Dy=2.222/16
+            self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
+            self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
             self.varlist.extend(['Dx','Dy'])
             self.derivS=self._derivS2
         elif Nx>1:
@@ -74,30 +81,24 @@ class TissueModel:
             self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
             #diffusion coeffs
-            self.Dx=2.222/16
+            self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
             self.varlist.append('Dx')
             self.derivS=self._derivS1                           
         else:
             self.Y=numpy.array(Y0)
             self.derivS=self._derivS0
-       
-        #option for noisy initial state
-        if noise!=0.0:
-            self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise    
-        #parameters
         self.R=8.314
         self.T=295
         self.F=96.487
         self.Ca0=3*numpy.ones(self.Y.shape[0:-1])
-        self.Cm=1
-        self.Ra=500
-        self.hx=0.03
-        self.hy=0.03
-        self.hz=0.03
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
         self.stimCoord=[0,0,0,0]
         self.stimCoord2=[0,0,0,0]
-        self.varlist.extend(['R','T','F','Cm','Ra','h'])
+        self.varlist.extend(['R','T','F','Cm','Ra','hx','hy','hz'])
+        #option for noisy initial state
+        if noise!=0.0:
+            self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise    
+
         
     def copyparams(self,mdl):
         """Retrieves parmeters from 'mdl'."""
@@ -109,27 +110,27 @@ class TissueModel:
 
     def sethx(self,hx):
         self.hx = hx
-        self.Dx=2.222/16
+        self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
 
     def sethy(self,hy):
         self.hy = hy
-        self.Dy=2.222/16
+        self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
 
     def sethz(self,hz):
         self.hz = hz
-        self.Dz=2.222/16
+        self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
 
     def setCm(self,Cm):
         self.Cm= Cm
-        self.Dx=2.222/16
-        self.Dy=2.222/16
-        self.Dz=2.222/16
+        self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
+        self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
+        self.Dz=1/(16*self.Ra*self.Cm*self.hz**2)
         
-    def setRa(self,Ra)
+    def setRa(self,Ra):
         self.Ra= Ra
-        self.Dx=2.222/16
-        self.Dy=2.222/16
-        self.Dz=2.222/16s
+        self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
+        self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
+        self.Dz=1/(16*self.Ra*self.Cm*self.hz**2)
 
     def getlistparams(self):
         dictparam = {}
@@ -334,6 +335,11 @@ class IntGen():
         logY=open(filename,'w')
         numpy.savez(logY,t=self.t,Y=self.Vm)
         logY.close()
+
+    def show(self):
+        vv =self.Vm.reshape((self.Vm.shape[0]*self.Vm.shape[1],self.Vm.shape[2]))
+        pylab.imshow(vv,aspect='auto',cmap=cm.jet)
+        pylab.show()
 
 class IntSerial(IntGen):
     def __init__(self,mdl):
