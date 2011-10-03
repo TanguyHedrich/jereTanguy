@@ -91,7 +91,9 @@ class TissueModel:
         self.Ca0=3*numpy.ones(self.Y.shape[0:-1])
         self.Cm=1
         self.Ra=500
-        self.h=0.03
+        self.hx=0.03
+        self.hy=0.03
+        self.hz=0.03
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
         self.stimCoord=[0,0,0,0]
         self.stimCoord2=[0,0,0,0]
@@ -104,6 +106,30 @@ class TissueModel:
         else:
             for var in mdl.varlist:
                 self.__dict__[var]=mdl.__dict__[var]
+
+    def sethx(self,hx):
+        self.hx = hx
+        self.Dx=2.222/16
+
+    def sethy(self,hy):
+        self.hy = hy
+        self.Dy=2.222/16
+
+    def sethz(self,hz):
+        self.hz = hz
+        self.Dz=2.222/16
+
+    def setCm(self,Cm):
+        self.Cm= Cm
+        self.Dx=2.222/16
+        self.Dy=2.222/16
+        self.Dz=2.222/16
+        
+    def setRa(self,Ra)
+        self.Ra= Ra
+        self.Dx=2.222/16
+        self.Dy=2.222/16
+        self.Dz=2.222/16s
 
     def getlistparams(self):
         dictparam = {}
@@ -351,7 +377,7 @@ class IntSerial(IntGen):
                 NbIter+=1
                 self.t[NbIter]=self.mdl.time
                 self.Vm[...,NbIter]=self.mdl.Y[...,0].copy()
-        return self.t,self.Vm
+        return self.t[0:NbIter],self.Vm[...,0:NbIter]
 
 class IntPara(IntGen):
 
