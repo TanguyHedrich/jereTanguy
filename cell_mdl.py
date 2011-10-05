@@ -15,8 +15,8 @@ class TissueModel:
         """Model init.
             dim: number of variables of state vector.
             Nx: number of cells along X.
-            Nx: number of cells along X.
-            Nx: number of cells along X.
+            Ny: number of cells along Y.
+            Nz: number of cells along Z.
             noise: noise coefficient for initial state.
             borders: boolean array [firstX,lastX,firstY,lastY,firstZ,lastZ]"""
         #dimensions
@@ -32,7 +32,9 @@ class TissueModel:
             Y0=numpy.zeros(dim)
         #parameters
         self._Cm=1
-        self._Ra=500
+        self._Rax=500
+        self._Ray=500
+        self._Raz=500
         self._hx=0.03
         self._hy=0.03
         self._hz=0.03
@@ -53,9 +55,9 @@ class TissueModel:
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2,
                                     self.Nz-borders[4]*self.Padding/2-borders[5]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=1/(16*self._Ra*self._Cm*self._hx**2)
-            self.Dy=1/(16*self._Ra*self._Cm*self._hy**2)
-            self.Dz=1/(16*self._Ra*self._Cm*self._hz**2)
+            self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
+            self.Dy=1/(16*self._Ray*self._Cm*self._hy**2)
+            self.Dz=1/(16*self._Raz*self._Cm*self._hz**2)
             self.varlist.extend(['Dx','Dy','Dz'])
             self.derivS=self._derivS3
         elif Nx*Ny:
@@ -69,8 +71,8 @@ class TissueModel:
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=1/(16*self._Ra*self._Cm*self._hx**2)
-            self.Dy=1/(16*self._Ra*self._Cm*self._hy**2)
+            self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
+            self.Dy=1/(16*self._Ray*self._Cm*self._hy**2)
             self.varlist.extend(['Dx','Dy'])
             self.derivS=self._derivS2
         elif Nx>1:
@@ -81,7 +83,7 @@ class TissueModel:
             self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
             #diffusion coeffs
-            self.Dx=1/(16*self._Ra*self._Cm*self._hx**2)
+            self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
             self.varlist.append('Dx')
             self.derivS=self._derivS1                           
         else:
@@ -94,14 +96,14 @@ class TissueModel:
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
         self.stimCoord=[0,0,0,0]
         self.stimCoord2=[0,0,0,0]
-        self.varlist.extend(['R','T','F','_Cm','_Ra','_hx','_hy','_hz'])
+        self.varlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy','_hz'])
         #option for noisy initial state
         if noise!=0.0:
             self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise    
 
         
     def copyparams(self,mdl):
-        """Retrieves parmeters from 'mdl'."""
+        """Retrieves parameters from 'mdl', if it has the same class as self."""
         if self.Name!=mdl.Name:
             print "Can't copy from different model type."
         else:
@@ -110,52 +112,82 @@ class TissueModel:
 
 
     def _get_hx(self):
+        """mutator of hx"""
         return self._hx
     def _set_hx(self,hx):
+        """accessor of hx"""
         self.hx = hx
-        self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
+        self.Dx=1/(16*self.Rax*self.Cm*self.hx**2)
 
     hx = property(fget=_get_hx,fset=_set_hx)
 
     def _get_hy(self):
+        """mutator of hy"""
         return self._hy
     def _set_hy(self,hy):
+        """accessor of hy"""
         self.hy = hy
-        self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
+        self.Dy=1/(16*self.Ray*self.Cm*self.hy**2)
     hy = property(fget=_get_hy,fset=_set_hy)
 
     def _get_hz(self):
+        """mutator of hz"""
         return self._hz
     def _set_hz(self,hz):
+        """accessor of hz"""
         self.hz = hz
-        self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
+        self.Dy=1/(16*self.Raz*self.Cm*self.hy**2)
     hz = property(fget=_get_hz,fset=_set_hz)
 
     def _get_Cm(self):
+        """mutator of Cm"""
         return self._Cm
     def _set_Cm(self,Cm):
+        """accessor of Cm"""
         self.Cm= Cm
-        self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
-        self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
-        self.Dz=1/(16*self.Ra*self.Cm*self.hz**2)
+        self.Dx=1/(16*self.Rax*self.Cm*self.hx**2)
+        self.Dy=1/(16*self.Ray*self.Cm*self.hy**2)
+        self.Dz=1/(16*self.Raz*self.Cm*self.hz**2)
     Cm = property(fget=_get_Cm,fset=_set_Cm)
-        
-    def _get_Ra(self):
-        return self._Ra
-    def _set_Ra(self,Ra):
-        self.Ra= Ra
-        self.Dx=1/(16*self.Ra*self.Cm*self.hx**2)
-        self.Dy=1/(16*self.Ra*self.Cm*self.hy**2)
-        self.Dz=1/(16*self.Ra*self.Cm*self.hz**2)
-    Ra = property(fget=_get_Ra,fset=_set_Ra)
+
+    def _get_Rax(self):
+        """mutator of Rax"""
+        return self._Rax
+    def _set_Rax(self,Rax):
+        """accessor of Rax"""
+        self.Rax = Rax
+        self.Dx=1/(16*self.Rax*self.Cm*self.hx**2)
+
+    Rax = property(fget=_get_Rax,fset=_set_Rax)
+
+    def _get_Ray(self):
+        """mutator of Ray"""
+        return self._Ray
+    def _set_Ray(self,Ray):
+        """accessor of Ray"""
+        self.Ray = Ray
+        self.Dy=1/(16*self.Ray*self.Cm*self.hy**2)
+    Ray = property(fget=_get_Ray,fset=_set_Ray)
+
+    def _get_Raz(self):
+        """mutator of Raz"""
+        return self._Raz
+    def _set_Raz(self,Raz):
+        """accessor of Raz"""
+        self.Raz = Raz
+        self.Dy=1/(16*self.Raz*self.Cm*self.hy**2)
+    Raz = property(fget=_get_Raz,fset=_set_Raz)
+
 
     def getlistparams(self):
+        """gives the list of parameters of object self"""
         dictparam = {}
         for var in self.varlist:
             dictparam[var]=self.__dict__[var]
         return dictparam
 
     def setlistparams(self,dictparam):
+        """Retrieves parameters from dictparam"""
         for var in dictparam:
             self.__dict__[var]=dictparam[var]
 
@@ -345,29 +377,45 @@ class Red6(TissueModel):
 
 
 class IntGen():
+    """Generic integrator class"""
+
     def __init__(self,mdl):
+        """The constructor.
+                mdl : model (of class Red3 or Red6)
+        """
         self.mdl = mdl
         
     def save(self,filename):
+        """save t and Vm using the method numpy.savez"""
         logY=open(filename,'w')
         numpy.savez(logY,t=self.t,Y=self.Vm)
         logY.close()
 
     def show(self):
+        """show Vm in a graph. Works for 1D projects only"""
         if self.Vm.ndim == 2:
             pylab.imshow(self.Vm,aspect='auto',cmap=cm.jet)
             pylab.show()
         elif self.Vm.ndim == 3:
-            pass
+            print "2D Vm is not supported"
         elif self.Vm.ndim == 4:
-            pass
+            print "2.5D Vm is not supported"
  
 
 class IntSerial(IntGen):
+    """Integrator class using serial computation"""
+
     def __init__(self,mdl):
+        """The constructor.
+                mdl : model (of class Red3 or Red6)
+        """
         IntGen.__init__(self,mdl)
 
     def compute(self,tmax=500,stimCoord=[0,0,0,0],stimCoord2=[0,0,0,0]):
+        """Compute.
+                tmax : maximum duration (in ms)
+                stimCoord,stimCoord2 : Coordinates of the stimulations
+        """
         self.decim=10
         NbIter=0
         self.dt=0.05
@@ -408,8 +456,12 @@ class IntSerial(IntGen):
         return self.t[0:NbIter],self.Vm[...,0:NbIter]
 
 class IntPara(IntGen):
+    """Integrator class using parallel computation"""
 
     def __init__(self,mdl):
+        """The constructor.
+                mdl : model (of class Red3 or Red6)
+        """
         IntGen.__init__(self,mdl)
         #find the engine processes
         rc = Client(profile='mpi')
@@ -432,8 +484,13 @@ class IntPara(IntGen):
 
 
     def compute(self,tmax=500,stimCoord=[0,0,0,0],stimCoord2=[0,0,0,0]):
+        """Compute.
+                tmax : maximum duration (in ms)
+                stimCoord,stimCoord2 : Coordinates of the stimulations
+        """
 
         def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam):
+            """Function used by the engine processes"""
             from mpi4py import MPI
             import cell_mdl
             import numpy
