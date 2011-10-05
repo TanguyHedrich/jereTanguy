@@ -60,6 +60,8 @@ class TissueModel:
             self.Dz=1/(16*self._Raz*self._Cm*self._hz**2)
             self.varlist.extend(['Dx','Dy','Dz'])
             self.derivS=self._derivS3
+            self.stimCoord=[0,0,0,0,0,0]
+            self.stimCoord2=[0,0,0,0,0,0]
         elif Nx*Ny:
             self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
             self.Ny=Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
@@ -75,6 +77,8 @@ class TissueModel:
             self.Dy=1/(16*self._Ray*self._Cm*self._hy**2)
             self.varlist.extend(['Dx','Dy'])
             self.derivS=self._derivS2
+            self.stimCoord=[0,0,0,0]
+            self.stimCoord2=[0,0,0,0]
         elif Nx>1:
             self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
             self.Y=numpy.tile(numpy.array(Y0),(self.Nx,1))
@@ -85,17 +89,19 @@ class TissueModel:
             #diffusion coeffs
             self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
             self.varlist.append('Dx')
-            self.derivS=self._derivS1                           
+            self.derivS=self._derivS1   
+            self.stimCoord=[0,0]
+            self.stimCoord2=[0,0]                        
         else:
             self.Y=numpy.array(Y0)
             self.derivS=self._derivS0
+            self.stimCoord=[0,0]
+            self.stimCoord2=[0,0]
         self.R=8.314
         self.T=295
         self.F=96.487
         self.Ca0=3*numpy.ones(self.Y.shape[0:-1])
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
-        self.stimCoord=[0,0,0,0]
-        self.stimCoord2=[0,0,0,0]
         self.varlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy','_hz'])
         #option for noisy initial state
         if noise!=0.0:
@@ -196,21 +202,25 @@ class TissueModel:
         """Print model infos."""
         return "Model {}, dimensions: {}.".format(self.Name,self.Y.shape)   
     def _derivative2(self,inumpyut, axis, output=None, mode="reflect", cval=0.0):
+        """Computes spatial derivative to get propagation."""
         return correlate1d(inumpyut, [1, -2, 1], axis, output, mode, cval, 0)
     def diff1d(self,Var):
+        """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)
         Dif[self.stimCoord[0]:self.stimCoord[1]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1]]=0
         return Dif*self.mask   
     def diff2d(self,Var):
+        """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)
         Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3]]=0
         return Dif*self.mask
     def diff3d(self,Var):
+        """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)+self.Dz*self._derivative2(Var,2)
-        Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],0]=0
-        Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],0]=0
+        Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],2]=0
+        Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],2]=0
         return Dif*self.mask    
     def _derivS0(self):
         """Computes spatial derivative to get propagation."""
@@ -411,7 +421,16 @@ class IntSerial(IntGen):
         """
         IntGen.__init__(self,mdl)
 
-    def compute(self,tmax=500,stimCoord=[0,0,0,0],stimCoord2=[0,0,0,0]):
+    def _stim1(self,stimCoord,Ist):
+        self.mdl.Istim[stimCoord[0]:stimCoord[1]]=Ist
+
+    def _stim2(self,stimCoord,Ist):
+        self.mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3]]=Ist
+
+    def _stim3(self,stimCoord,Ist):
+        self.mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],stimCoord[4]:stimCoord[5]]=Ist
+
+    def compute(self,tmax=500,stimCoord=-1,stimCoord2=-1):        
         """Compute.
                 tmax : maximum duration (in ms)
                 stimCoord,stimCoord2 : Coordinates of the stimulations
@@ -423,22 +442,36 @@ class IntSerial(IntGen):
         dtMin = self.dt
         dtMax = 6
         dVmax = 1
-
         self.t=numpy.zeros(round(tmax/(self.dt*self.decim))+1)
         
+        if stimCoord == -1:
+            stimCoord = self.mdl.stimCoord
+        else:
+            self.mdl.stimCoord = stimCoord
+
+        if stimCoord2 == -1:
+            stimCoord2 = self.mdl.stimCoord2
+        else:
+            self.mdl.stimCoord2 = stimCoord2
 
         if self.mdl.Y.ndim == 2:
             self.Vm = numpy.empty((self.mdl.Nx,len(self.t)))
+            self.stim = self._stim1
         elif self.mdl.Y.ndim == 3:
             self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,len(self.t)))
+            self.stim = self._stim2
         elif self.mdl.Y.ndim == 4:
             self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,len(self.t)))
+            self.stim = self._stim3
+
+        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
+        
 
         #Integration
         while self.mdl.time<tmax:
             Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax))
-            self.mdl.Istim[stimCoord]=Ist
-            self.mdl.Istim[stimCoord2]=Ist
+            self.stim(stimCoord,Ist)
+            self.stim(stimCoord2,Ist)
            # mdl.Istim[50:95,100]=Ist
             self.mdl.derivT(self.dt)
             #define new time step
@@ -483,7 +516,7 @@ class IntPara(IntGen):
             self.nbx = self.nby = div[ldiv/2]
 
 
-    def compute(self,tmax=500,stimCoord=[0,0,0,0],stimCoord2=[0,0,0,0]):
+    def compute(self,tmax=500,stimCoord=-1,stimCoord2=-1):
         """Compute.
                 tmax : maximum duration (in ms)
                 stimCoord,stimCoord2 : Coordinates of the stimulations
@@ -533,8 +566,8 @@ class IntPara(IntGen):
 
 
             #Stimulation (global coordinates)
-            xyIstim1 = [3,42,4,6] 
-            xyIstim2 = [40,82,95,97]
+            xyIstim1 = stimCoord 
+            xyIstim2 = stimCoord2
             
             #computing the local coordinates
             if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
@@ -574,6 +607,17 @@ class IntPara(IntGen):
             if xyIstim2[0] != -1 and xyIstim2[2] != -1:
                 mdl.stimCoord2 = xyIstim2
 
+            def _stim1(stimCoord,Ist):
+                if stimCoord[0] != -1:
+                    mdl.Istim[stimCoord[0]:stimCoord[1]]=Ist
+
+            def _stim2(stimCoord,Ist):
+                if stimCoord[0] != -1 and stimCoord[2] != -1:
+                    mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3]]=Ist
+
+            def _stim3(stimCoord,Ist):
+                if stimCoord[0] != -1 and stimCoord[2] != -1:
+                    mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],stimCoord[4]:stimCoord[5]]=Ist
 
             decim=20
             NbIter=0
@@ -584,18 +628,19 @@ class IntPara(IntGen):
 
             if Nx*Ny*Nz:
                 Vm=numpy.zeros((mdl.Nx,mdl.Ny,mdl.Nz,round(tmax/(dt*decim))+1))
+                stim = _stim3
             elif Nx*Ny:
                 Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
+                stim = _stim2
             elif Nx:
                 Vm=numpy.zeros((mdl.Nx,round(tmax/(dt*decim))+1))
+                stim = _stim1
 
             while (mdl.time<tmax):
                 Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
 
-                if xyIstim1[0] != -1 and xyIstim1[2] != -1:
-                    mdl.Istim[xyIstim1[0]:xyIstim1[1],xyIstim1[2]:xyIstim1[3]]=Ist
-                if xyIstim2[0] != -1 and xyIstim2[2] != -1:
-                    mdl.Istim[xyIstim2[0]:xyIstim2[1],xyIstim2[2]:xyIstim2[3]]=Ist
+                stim(xyIstim1,Ist)
+                stim(xyIstim2,Ist)
 
                 mdl.derivT(dt)
 
@@ -747,6 +792,18 @@ class IntPara(IntGen):
         except: Ny = 0
 
         Nx = self.mdl.Nx
+
+        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
+
+        if stimCoord == -1:
+            stimCoord = self.mdl.stimCoord
+        else:
+            self.mdl.stimCoord = stimCoord
+
+        if stimCoord2 == -1:
+            stimCoord2 = self.mdl.stimCoord2
+        else:
+            self.mdl.stimCoord2 = stimCoord2
 
         res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams())
         self.view.wait(res)  #wait for the results
