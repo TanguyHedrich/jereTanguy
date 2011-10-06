@@ -58,7 +58,7 @@ class TissueModel:
             self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
             self.Dy=1/(16*self._Ray*self._Cm*self._hy**2)
             self.Dz=1/(16*self._Raz*self._Cm*self._hz**2)
-            self.varlist.extend(['Dx','Dy','Dz'])
+            self.parlist.extend(['Dx','Dy','Dz'])
             self.derivS=self._derivS3
             self.stimCoord=[0,0,0,0,0,0]
             self.stimCoord2=[0,0,0,0,0,0]
@@ -75,7 +75,7 @@ class TissueModel:
             #diffusion coeffs
             self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
             self.Dy=1/(16*self._Ray*self._Cm*self._hy**2)
-            self.varlist.extend(['Dx','Dy'])
+            self.parlist.extend(['Dx','Dy'])
             self.derivS=self._derivS2
             self.stimCoord=[0,0,0,0]
             self.stimCoord2=[0,0,0,0]
@@ -88,7 +88,7 @@ class TissueModel:
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
             #diffusion coeffs
             self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
-            self.varlist.append('Dx')
+            self.parlist.append('Dx')
             self.derivS=self._derivS1   
             self.stimCoord=[0,0]
             self.stimCoord2=[0,0]                        
@@ -103,7 +103,7 @@ class TissueModel:
         self.Ca0=3*numpy.ones(self.Y.shape[0:-1])
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
         self.masktempo = 1 
-        self.varlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy','_hz','masktempo'])
+        self.parlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy','_hz','masktempo'])
         #option for noisy initial state
         if noise!=0.0:
             self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise    
@@ -114,8 +114,8 @@ class TissueModel:
         if self.Name!=mdl.Name:
             print "Can't copy from different model type."
         else:
-            for var in mdl.varlist:
-                self.__dict__[var]=mdl.__dict__[var]
+            for par in mdl.parlist:
+                self.__dict__[par]=mdl.__dict__[par]
 
 
     def _get_hx(self):
@@ -189,14 +189,14 @@ class TissueModel:
     def getlistparams(self):
         """gives the list of parameters of object self"""
         dictparam = {}
-        for var in self.varlist:
-            dictparam[var]=self.__dict__[var]
+        for par in self.parlist:
+            dictparam[par]=self.__dict__[par]
         return dictparam
 
     def setlistparams(self,dictparam):
         """Retrieves parameters from dictparam"""
-        for var in dictparam:
-            self.__dict__[var]=dictparam[var]
+        for par in dictparam:
+            self.__dict__[par]=dictparam[par]
 
     
     def __repr__(self):
@@ -268,7 +268,7 @@ class Red3(TissueModel):
     """Cellular and tissular model Red3"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init."""
-        self.varlist=['Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Gca2','vca2','Rca','Jbase','Name']
+        self.parlist=['Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Gca2','vca2','Rca','Jbase','Name']
         #Generic elements
         TissueModel.__init__(self,3,Nx,Ny,Nz,noise,borders)
         #Default Parameters
@@ -319,7 +319,7 @@ class Red6(TissueModel):
     """Cellular and tissular model Red6"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init."""
-        self.varlist=['Gca','Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Name']
+        self.parlist=['Gca','Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Name']
         #Generic elements
         TissueModel.__init__(self,6,Nx,Ny,Nz,noise,borders)
         #Default Parameters
@@ -797,9 +797,7 @@ class IntPara(IntGen):
 
                 mdl.derivT(dt)
                 comm(mdl,rank,test,nbx)
-                               
-
-
+                        
                 mdl.time +=dt
                 if not round(mdl.time/dt)%decim:
                     NbIter+=1
