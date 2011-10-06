@@ -1,4 +1,5 @@
 import cell_mdl
+reload(cell_mdl)
 from enthought.mayavi import mlab
 
 model = cell_mdl.Red3(Nx=20,Ny=30,Nz=5)

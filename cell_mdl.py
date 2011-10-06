@@ -102,7 +102,8 @@ class TissueModel:
         self.F=96.487
         self.Ca0=3*numpy.ones(self.Y.shape[0:-1])
         self.Istim=numpy.zeros(self.Y.shape[0:-1])
-        self.varlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy','_hz'])
+        self.masktempo = 1 
+        self.varlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy','_hz','masktempo'])
         #option for noisy initial state
         if noise!=0.0:
             self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise    
@@ -311,7 +312,7 @@ class Red3(TissueModel):
         self.dY[...,2] = self.fc*(-self.alpha*Ica2 - self.Kca*Ca)
         #update Y
         self.derivS()
-        self.Y+=self.dY*dt
+        self.Y+=self.dY*dt*self.masktempo
         
 class Red6(TissueModel):
     """Cellular and tissular model Red6"""
@@ -380,7 +381,7 @@ class Red6(TissueModel):
         self.dY[...,5] = self.fc*(-self.alpha*Ica - self.Kca*Ca)
         #update Y
         self.derivS()
-        self.Y+=self.dY*dt
+        self.Y+=self.dY*dt*self.masktempo
         
 
 
@@ -601,21 +602,29 @@ class IntPara(IntGen):
             mdl.setlistparams(listparam)
             mdl.Name += 'p'
 
+            if not(isinstance(mdl.masktempo,int)):
+                if mdl.masktempo.ndim == 1:
+                    mdl.masktempo = mdl.masktempo[x[0]:x[1]]
+                elif mdl.masktempo.ndim == 2:
+                    mdl.masktempo = mdl.masktempo[x[0]:x[1],y[0]:y[1]]
+                else:
+                    mdl.masktempo = mdl.masktempo[x[0]:x[1],y[0]:y[1],:]
+
             #Tells the model where the stimuli are
             if xyIstim1[0] != -1 and xyIstim1[2] != -1:
                 mdl.stimCoord = xyIstim1
             if xyIstim2[0] != -1 and xyIstim2[2] != -1:
                 mdl.stimCoord2 = xyIstim2
 
-            def _stim1(stimCoord,Ist):
+            def _stim1(mdl,stimCoord,Ist):
                 if stimCoord[0] != -1:
                     mdl.Istim[stimCoord[0]:stimCoord[1]]=Ist
 
-            def _stim2(stimCoord,Ist):
+            def _stim2(mdl,stimCoord,Ist):
                 if stimCoord[0] != -1 and stimCoord[2] != -1:
                     mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3]]=Ist
 
-            def _stim3(stimCoord,Ist):
+            def _stim3(mdl,stimCoord,Ist):
                 if stimCoord[0] != -1 and stimCoord[2] != -1:
                     mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],stimCoord[4]:stimCoord[5]]=Ist
 
@@ -639,8 +648,8 @@ class IntPara(IntGen):
             while (mdl.time<tmax):
                 Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
 
-                stim(xyIstim1,Ist)
-                stim(xyIstim2,Ist)
+                stim(mdl,xyIstim1,Ist)
+                stim(mdl,xyIstim2,Ist)
 
                 mdl.derivT(dt)
 
@@ -793,8 +802,6 @@ class IntPara(IntGen):
 
         Nx = self.mdl.Nx
 
-        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
-
         if stimCoord == -1:
             stimCoord = self.mdl.stimCoord
         else:
@@ -804,6 +811,10 @@ class IntPara(IntGen):
             stimCoord2 = self.mdl.stimCoord2
         else:
             self.mdl.stimCoord2 = stimCoord2
+
+        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
+
+
 
         res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams())
         self.view.wait(res)  #wait for the results
