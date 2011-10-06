@@ -310,9 +310,10 @@ class Red3(TissueModel):
         self.dY[...,0] = (self.Istim - Ica2 -Ik - Ikca -Il)/self.Cm
         self.dY[...,1] = (hki-nk)/tnk
         self.dY[...,2] = self.fc*(-self.alpha*Ica2 - self.Kca*Ca)
+        self.dY *= self.masktempo
         #update Y
         self.derivS()
-        self.Y+=self.dY*dt*self.masktempo
+        self.Y+=self.dY*dt
         
 class Red6(TissueModel):
     """Cellular and tissular model Red6"""
