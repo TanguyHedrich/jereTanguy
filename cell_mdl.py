@@ -506,17 +506,20 @@ class IntPara(IntGen):
 
         #number of clients
         nCl = len(rc.ids)
-        #divisors of nCl
-        div = [i for i in range(1,nCl+1) if nCl%i==0]
-        ldiv = len(div)
 
-        #the surface will be divided into nbx rows and nby columns
-        if ldiv %2 == 0:
-            self.nbx = div[ldiv/2]
-            self.nby = div[ldiv/2-1]
+        if mdl.Y.ndim >2:
+            #divisors of nCl
+            div = [i for i in range(1,nCl+1) if nCl%i==0]
+            ldiv = len(div)
+            #the surface will be divided into nbx rows and nby columns
+            if ldiv %2 == 0:
+                self.nbx = div[ldiv/2]
+                self.nby = div[ldiv/2-1]
+            else:
+                self.nbx = self.nby = div[ldiv/2]
         else:
-            self.nbx = self.nby = div[ldiv/2]
-
+            self.nbx = nCl
+            self.nby = 0
 
     def compute(self,tmax=500,stimCoord=-1,stimCoord2=-1):
         """Compute.
@@ -531,46 +534,41 @@ class IntPara(IntGen):
             import numpy
 
             def findlimitsx(rank,nbx,Nx):
-                newNx = round( (Nx + (nbx-1) * 2) / (nbx) )
+                newNxx = round( (Nx + (nbx-1) * 2) / (nbx) )
                 x = [0,0]
                 if (rank%nbx==0):
-                    x = [0,newNx]
+                    x = [0,newNxx]
                 elif rank%nbx==(nbx-1):
-                    x = [rank%nbx * newNx - rank%nbx,Nx]
-                    newNx = x[1] - x[0]
+                    x = [rank%nbx * newNxx - rank%nbx,Nx]
+                    newNxx = x[1] - x[0]
                 else:
-                    x[0] = rank%nbx * newNx - rank%nbx
-                    x[1] = x[0] + newNx
+                    x[0] = rank%nbx * newNxx - rank%nbx
+                    x[1] = x[0] + newNxx
 
-                return x,newNx
+                return x,newNxx
 
             def findlimitsy(rank,nby,Ny,nbx):
-                newNy = round( (Ny + (nby-1) * 2) / (nby) )
+                newNyy = round( (Ny + (nby-1) * 2) / (nby) )
                 y = [0,0]
                 if (rank/nbx==0):
-                    y = [0,newNy]
+                    y = [0,newNyy]
                 elif (rank/nbx==(nby-1)):
-                    y = [rank/nbx * newNy - rank/nbx,Ny]
-                    newNy = y[1] - y[0]
+                    y = [rank/nbx * newNyy - rank/nbx,Ny]
+                    newNyy = y[1] - y[0]
                 else:
-                    y[0] = rank/nbx * newNy - rank/nbx
-                    y[1] = y[0] + newNy
-                return y,newNy
+                    y[0] = rank/nbx * newNyy - rank/nbx
+                    y[1] = y[0] + newNyy
+                return y,newNyy
 
 
             rank = MPI.COMM_WORLD.Get_rank()
             # Which rows should I compute?
             [x,newNx] = findlimitsx(rank,nbx,Nx+4)
 
-            # What about the columns?
-            if Ny:
-                [y,newNy] = findlimitsy(rank,nby,Ny+4,nbx)
-
-
             #Stimulation (global coordinates)
             xyIstim1 = stimCoord 
             xyIstim2 = stimCoord2
-            
+
             #computing the local coordinates
             if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
                 xyIstim1[0:2] = [-1,-1]
@@ -582,24 +580,30 @@ class IntPara(IntGen):
             else:
                 xyIstim2[0:2] = [max(xyIstim2[0],x[0])-x[0],min(xyIstim2[1],x[-1])-x[0]]
 
+            # What about the columns?
+            if Ny:
+                [y,newNy] = findlimitsy(rank,nby,Ny+4,nbx)
 
-            if (xyIstim1[2] > y[-1]) or (xyIstim1[3] < y[0]):
-                xyIstim1[2:4] = [-1,-1]
-            else:
-                xyIstim1[2:4] = [max(xyIstim1[2],y[0])-y[0],min(xyIstim1[3],y[-1])-y[0]]
+                if (xyIstim1[2] > y[-1]) or (xyIstim1[3] < y[0]):
+                    xyIstim1[2:4] = [-1,-1]
+                else:
+                    xyIstim1[2:4] = [max(xyIstim1[2],y[0])-y[0],min(xyIstim1[3],y[-1])-y[0]]
 
-            if (xyIstim2[2] > y[-1]) or (xyIstim2[3] < y[0]):
-                xyIstim2[2:4] = [-1,-1]
-            else:
-                xyIstim2[2:4] = [max(xyIstim2[2],y[0])-y[0],min(xyIstim2[3],y[-1])-y[0]]
-
+                if (xyIstim2[2] > y[-1]) or (xyIstim2[3] < y[0]):
+                    xyIstim2[2:4] = [-1,-1]
+                else:
+                    xyIstim2[2:4] = [max(xyIstim2[2],y[0])-y[0],min(xyIstim2[3],y[-1])-y[0]]
+                
+                Ny2 = newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1))
+            else:  y = 0
+            
 
             #Creation of the model (one for each process)
             mpi=[(rank%nbx==0),rank%nbx==(nbx-1),(rank/nbx==0),(rank/nbx==(nby-1)),True,True]
             if listparam['Name'] == 'Red6':
-                mdl=cell_mdl.Red6(Nx = newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny = newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),Nz=Nz,borders=mpi)
+                mdl=cell_mdl.Red6(Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=Ny2,Nz=Nz,borders=mpi)
             elif listparam['Name'] == 'Red3':
-                mdl=cell_mdl.Red3(Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1)),Nz=Nz,borders=mpi)
+                mdl=cell_mdl.Red3(Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=Ny2,Nz=Nz,borders=mpi)
             mdl.setlistparams(listparam)
             mdl.Name += 'p'
 
@@ -612,9 +616,9 @@ class IntPara(IntGen):
                     mdl.masktempo = mdl.masktempo[x[0]:x[1],y[0]:y[1],:]
 
             #Tells the model where the stimuli are
-            if xyIstim1[0] != -1 and xyIstim1[2] != -1:
+            if xyIstim1[0] != -1 and (Ny and xyIstim1[2] != -1):
                 mdl.stimCoord = xyIstim1
-            if xyIstim2[0] != -1 and xyIstim2[2] != -1:
+            if xyIstim2[0] != -1 and (Ny and xyIstim2[2] != -1):
                 mdl.stimCoord2 = xyIstim2
 
             def _stim1(mdl,stimCoord,Ist):
@@ -629,6 +633,138 @@ class IntPara(IntGen):
                 if stimCoord[0] != -1 and stimCoord[2] != -1:
                     mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],stimCoord[4]:stimCoord[5]]=Ist
 
+            def _comm1(mdl,rank,test,nbx):
+                from mpi4py import MPI
+                to_send_1 = mdl.Y[0,0]
+                to_send_2 = mdl.Y[-1,0]
+                to_recv_1 = mdl.Y[-1,0]
+                to_recv_2 = mdl.Y[0,0]
+                if test[0]:
+                    if test[1]:
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
+                    if test[2]:
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
+                    if test[1]:
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
+                else:
+                    if test[2]:
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
+                    if test[1]:
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
+                    if test[2]:
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+1)	
+                mdl.Y[-1,0] = to_recv_1 
+                mdl.Y[0,0] =  to_recv_2
+
+            def _comm2(mdl,rank,test,nbx):
+                from mpi4py import MPI
+                to_send_1 = mdl.Y[0,:,0]
+                to_send_2 = mdl.Y[-1,:,0]
+                to_recv_1 = mdl.Y[-1,:,0]
+                to_recv_2 = mdl.Y[0,:,0]
+
+                if test[0]:
+                    if test[1]:
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
+                    if test[2]:
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
+                    if test[1]:
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
+                else:
+                    if test[2]:
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
+                    if test[1]:
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
+                    if test[2]:
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
+
+                mdl.Y[-1,:,0] = to_recv_1
+                mdl.Y[0,:,0] = to_recv_2
+
+                #Communication y
+                to_send_1 = mdl.Y[:,0,0]
+                to_send_2 = mdl.Y[:,-1,0]
+                to_recv_1 = mdl.Y[:,-1,0]
+                to_recv_2 = mdl.Y[:,0,0]
+
+                if test[0]:
+                    if test[3]:
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
+                    if test[4]:
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
+                    if test[3]:
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
+                else:
+                    if test[4]:
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
+                    if test[3]:
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
+                    if test[4]:
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
+
+                mdl.Y[:,-1,0] = to_recv_1
+                mdl.Y[:,0,0] = to_recv_2
+
+            def _comm3(mdl,rank,test,nbx):
+                from mpi4py import MPI
+                to_send_1 = mdl.Y[0,:,:,0]
+                to_send_2 = mdl.Y[-1,:,:,0]
+                to_recv_1 = mdl.Y[-1,:,:,0]
+                to_recv_2 = mdl.Y[0,:,:,0]
+
+                if test[0]:
+                    if test[1]:
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
+                    if test[2]:
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
+                    if test[1]:
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
+                else:
+                    if test[2]:
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
+                    if test[1]:
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
+                    if test[2]:
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
+
+                mdl.Y[-1,:,:,0] = to_recv_1
+                mdl.Y[0,:,:,0] = to_recv_2
+
+                #Communication y
+                to_send_1 = mdl.Y[:,0,:,0]
+                to_send_2 = mdl.Y[:,-1,:,0]
+                to_recv_1 = mdl.Y[:,-1,:,0]
+                to_recv_2 = mdl.Y[:,0,:,0]
+
+                if test[0]:
+                    if test[3]:
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
+                    if test[4]:
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
+                    if test[3]:
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
+                else:
+                    if test[4]:
+                        MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
+                    if test[3]:
+                        to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
+                        MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
+                    if test[4]:
+                        to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
+
+                mdl.Y[:,-1,:,0] = to_recv_1
+                mdl.Y[:,0,:,0] = to_recv_2
+
+
             decim=20
             NbIter=0
             dt=0.05
@@ -639,12 +775,19 @@ class IntPara(IntGen):
             if Nx*Ny*Nz:
                 Vm=numpy.zeros((mdl.Nx,mdl.Ny,mdl.Nz,round(tmax/(dt*decim))+1))
                 stim = _stim3
+                comm = _comm3
+                test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1,rank/nbx != 0,rank/nbx != nby-1]
             elif Nx*Ny:
                 Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
                 stim = _stim2
+                comm = _comm2
+                test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1,rank/nbx != 0,rank/nbx != nby-1]
             elif Nx:
                 Vm=numpy.zeros((mdl.Nx,round(tmax/(dt*decim))+1))
                 stim = _stim1
+                comm = _comm1
+                test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1]
+
 
             while (mdl.time<tmax):
                 Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
@@ -653,133 +796,8 @@ class IntPara(IntGen):
                 stim(mdl,xyIstim2,Ist)
 
                 mdl.derivT(dt)
-
-                #Communication 
-                if Nx*Ny*Nz:
-                    to_send_1 = mdl.Y[0,:,:,0]
-                    to_send_2 = mdl.Y[-1,:,:,0]
-                    to_recv_1 = mdl.Y[-1,:,:,0]
-                    to_recv_2 = mdl.Y[0,:,:,0]
-
-                    if rank % 2:
-                        if rank%nbx != 0:
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
-                        if rank%nbx != nbx - 1:
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
-                        if rank%nbx != 0:
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
-                    else:
-                        if rank%nbx != nbx - 1:
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
-                        if rank%nbx != 0:
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
-                        if rank%nbx != nbx - 1:
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+1)	
-
-                    mdl.Y[-1,:,:,0] = to_recv_1 
-                    mdl.Y[0,:,:,0] =  to_recv_2
-
-                    #Communication y
-                    to_send_1 = mdl.Y[:,0,:,0]
-                    to_send_2 = mdl.Y[:,-1,:,0]
-                    to_recv_1 = mdl.Y[:,-1,:,0]
-                    to_recv_2 = mdl.Y[:,0,:,0]
-
-                    if rank % 2:
-                        if rank/nbx != 0:
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
-                        if rank/nbx != nby - 1:
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
-                        if rank/nbx != 0:
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
-                    else:
-                        if rank/nbx != nby - 1:
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
-                        if rank/nbx != 0:
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)	    
-                        if rank/nbx != nby - 1:
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
-
-                    mdl.Y[:,-1,:,0] = to_recv_1
-                    mdl.Y[:,0,:,0] =  to_recv_2
-
-                elif Nx*Ny:
-                    to_send_1 = mdl.Y[0,:,0]
-                    to_send_2 = mdl.Y[-1,:,0]
-                    to_recv_1 = mdl.Y[-1,:,0]
-                    to_recv_2 = mdl.Y[0,:,0]
-
-                    if rank % 2:
-                        if rank%nbx != 0:
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
-                        if rank%nbx != nbx - 1:
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
-                        if rank%nbx != 0:
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
-                    else:
-                        if rank%nbx != nbx - 1:
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
-                        if rank%nbx != 0:
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
-                        if rank%nbx != nbx - 1:
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+1)	
-
-                    mdl.Y[-1,:,0] = to_recv_1 
-                    mdl.Y[0,:,0] =  to_recv_2
-
-                    #Communication y
-                    to_send_1 = mdl.Y[:,0,0]
-                    to_send_2 = mdl.Y[:,-1,0]
-                    to_recv_1 = mdl.Y[:,-1,0]
-                    to_recv_2 = mdl.Y[:,0,0]
-
-                    if rank % 2:
-                        if rank/nbx != 0:
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
-                        if rank/nbx != nby - 1:
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
-                        if rank/nbx != 0:
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)
-                    else:
-                        if rank/nbx != nby - 1:
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+nbx)
-                        if rank/nbx != 0:
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-nbx)
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-nbx)	    
-                        if rank/nbx != nby - 1:
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+nbx)
-
-                    mdl.Y[:,-1,0] = to_recv_1
-                    mdl.Y[:,0,0] =  to_recv_2
-
-                elif Nx:
-                    to_send1,to_send2 = mdl.Y[0,0],mdl.Y[-1,0]
-                    pair,first,last = [rank%2,rank%nbx!=0,rank%nbx!= nbx-1]
-                    if pair:
-                        if first:
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
-                        if last:
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
-                        if first:
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
-                    else:
-                        if last:
-                            to_recv_1 = MPI.COMM_WORLD.recv(source=rank+1)
-                        if first:
-                            MPI.COMM_WORLD.send(to_send_1 , dest=rank-1)
-                            to_recv_2 = MPI.COMM_WORLD.recv(source=rank-1)
-                        if last:
-                            MPI.COMM_WORLD.send(to_send_2, dest=rank+1)
-                    mdl.Y[-1,0],mdl.Y[0,0] = to_recv1,to_recv2
-
+                comm(mdl,rank,test,nbx)
+                               
 
 
                 mdl.time +=dt
@@ -795,13 +813,13 @@ class IntPara(IntGen):
 
             return {'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
 
-        try: Nz = self.mdl.Nz
+        try: Nz = self.mdl.Nz - self.mdl.Padding
         except: Nz = 0
 
-        try: Ny = self.mdl.Ny
+        try: Ny = self.mdl.Ny - self.mdl.Padding
         except: Ny = 0
 
-        Nx = self.mdl.Nx
+        Nx = self.mdl.Nx - self.mdl.Padding
 
         if stimCoord == -1:
             stimCoord = self.mdl.stimCoord
@@ -814,7 +832,6 @@ class IntPara(IntGen):
             self.mdl.stimCoord2 = stimCoord2
 
         assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
-
 
 
         res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams())
@@ -846,6 +863,9 @@ class IntPara(IntGen):
             i_client = find(i, tabrank)
             x = tabResults[i_client]['x']
             y = tabResults[i_client]['y']
-            self.Vm[x[0]:x[1],y[0]:y[1],...]=numpy.array(tabResults[i_client]['Vm'])
+            if y:
+                self.Vm[x[0]:x[1],y[0]:y[1],...]=numpy.array(tabResults[i_client]['Vm'])
+            else:
+                self.Vm[x[0]:x[1],:]=numpy.array(tabResults[i_client]['Vm'])
 
         return self.t,self.Vm
