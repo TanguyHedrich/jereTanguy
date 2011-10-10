@@ -55,9 +55,9 @@ class TissueModel:
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2,
                                     self.Nz-borders[4]*self.Padding/2-borders[5]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
-            self.Dy=1/(16*self._Ray*self._Cm*self._hy**2)
-            self.Dz=1/(16*self._Raz*self._Cm*self._hz**2)
+            self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+            self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+            self.Dz=1/(2*self._Raz*self._Cm*self._hz)
             self.parlist.extend(['Dx','Dy','Dz'])
             self.derivS=self._derivS3
             self.stimCoord=[0,0,0,0,0,0]
@@ -73,8 +73,8 @@ class TissueModel:
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
-            self.Dy=1/(16*self._Ray*self._Cm*self._hy**2)
+            self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+            self.Dy=1/(2*self._Ray*self._Cm*self._hy)
             self.parlist.extend(['Dx','Dy'])
             self.derivS=self._derivS2
             self.stimCoord=[0,0,0,0]
@@ -87,7 +87,7 @@ class TissueModel:
             self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
             #diffusion coeffs
-            self.Dx=1/(16*self._Rax*self._Cm*self._hx**2)
+            self.Dx=1/(2*self._Rax*self._Cm*self._hx)
             self.parlist.append('Dx')
             self.derivS=self._derivS1   
             self.stimCoord=[0,0]
@@ -124,7 +124,7 @@ class TissueModel:
     def _set_hx(self,hx):
         """accessor of hx"""
         self.hx = hx
-        self.Dx=1/(16*self.Rax*self.Cm*self.hx**2)
+        self.Dx=1/(2*self._Rax*self._Cm*self._hx)
 
     hx = property(fget=_get_hx,fset=_set_hx)
 
@@ -134,7 +134,7 @@ class TissueModel:
     def _set_hy(self,hy):
         """accessor of hy"""
         self.hy = hy
-        self.Dy=1/(16*self.Ray*self.Cm*self.hy**2)
+        self.Dy=1/(2*self._Ray*self._Cm*self._hy)
     hy = property(fget=_get_hy,fset=_set_hy)
 
     def _get_hz(self):
@@ -143,7 +143,7 @@ class TissueModel:
     def _set_hz(self,hz):
         """accessor of hz"""
         self.hz = hz
-        self.Dy=1/(16*self.Raz*self.Cm*self.hy**2)
+        self.Dz=1/(2*self._Raz*self._Cm*self._hz)
     hz = property(fget=_get_hz,fset=_set_hz)
 
     def _get_Cm(self):
@@ -152,9 +152,9 @@ class TissueModel:
     def _set_Cm(self,Cm):
         """accessor of Cm"""
         self.Cm= Cm
-        self.Dx=1/(16*self.Rax*self.Cm*self.hx**2)
-        self.Dy=1/(16*self.Ray*self.Cm*self.hy**2)
-        self.Dz=1/(16*self.Raz*self.Cm*self.hz**2)
+        self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+        self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        self.Dz=1/(2*self._Raz*self._Cm*self._hz)
     Cm = property(fget=_get_Cm,fset=_set_Cm)
 
     def _get_Rax(self):
@@ -163,7 +163,7 @@ class TissueModel:
     def _set_Rax(self,Rax):
         """accessor of Rax"""
         self.Rax = Rax
-        self.Dx=1/(16*self.Rax*self.Cm*self.hx**2)
+        self.Dx=1/(2*self._Rax*self._Cm*self._hx)
 
     Rax = property(fget=_get_Rax,fset=_set_Rax)
 
@@ -173,7 +173,7 @@ class TissueModel:
     def _set_Ray(self,Ray):
         """accessor of Ray"""
         self.Ray = Ray
-        self.Dy=1/(16*self.Ray*self.Cm*self.hy**2)
+        self.Dy=1/(2*self._Ray*self._Cm*self._hy)
     Ray = property(fget=_get_Ray,fset=_set_Ray)
 
     def _get_Raz(self):
@@ -182,7 +182,7 @@ class TissueModel:
     def _set_Raz(self,Raz):
         """accessor of Raz"""
         self.Raz = Raz
-        self.Dy=1/(16*self.Raz*self.Cm*self.hy**2)
+        self.Dz=1/(2*self._Raz*self._Cm*self._hz)
     Raz = property(fget=_get_Raz,fset=_set_Raz)
 
 
@@ -220,8 +220,8 @@ class TissueModel:
     def diff3d(self,Var):
         """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)+self.Dz*self._derivative2(Var,2)
-        Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],2]=0
-        Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],2]=0
+        Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],self.stimCoord[4]:self.stimCoord[5]]=0
+        Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],self.stimCoord2[4]:self.stimCoord2[5]]=0
         return Dif*self.mask    
     def _derivS0(self):
         """Computes spatial derivative to get propagation."""
@@ -472,6 +472,7 @@ class IntSerial(IntGen):
         #Integration
         while self.mdl.time<tmax:
             Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax))
+#            self.stim(stimCoord,Ist)
             self.stim(stimCoord,Ist)
             self.stim(stimCoord2,Ist)
            # mdl.Istim[50:95,100]=Ist
@@ -812,10 +813,10 @@ class IntPara(IntGen):
             return {'rank':rank,'time':time,'x':x,'y':y,'Vm':Vm}
 
         try: Nz = self.mdl.Nz - self.mdl.Padding
-        except: Nz = 0
+        except AttributeError: Nz = 0
 
         try: Ny = self.mdl.Ny - self.mdl.Padding
-        except: Ny = 0
+        except AttributeError: Ny = 0
 
         Nx = self.mdl.Nx - self.mdl.Padding
 
