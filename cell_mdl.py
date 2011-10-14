@@ -9,7 +9,7 @@ import matplotlib.cm as cm
 from scipy.ndimage.filters import correlate1d
 from IPython.parallel import Client
 
-class TissueModel:
+class TissueModel(object):
     """Generic cell and tissue model."""
     def __init__(self,dim,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
         """Model init.
@@ -116,72 +116,72 @@ class TissueModel:
         else:
             for par in mdl.parlist:
                 self.__dict__[par]=mdl.__dict__[par]
-
+    
 
     def _get_hx(self):
-        """mutator of hx"""
+        """accessor of hx"""
         return self._hx
     def _set_hx(self,hx):
-        """accessor of hx"""
-        self.hx = hx
+        """mutator of hx"""
+        self._hx = hx
         self.Dx=1/(2*self._Rax*self._Cm*self._hx)
 
-    hx = property(fget=_get_hx,fset=_set_hx)
+    hx = property(_get_hx,_set_hx)
 
     def _get_hy(self):
-        """mutator of hy"""
+        """accessor of hy"""
         return self._hy
     def _set_hy(self,hy):
-        """accessor of hy"""
-        self.hy = hy
+        """mutator of hy"""
+        self._hy = hy
         self.Dy=1/(2*self._Ray*self._Cm*self._hy)
     hy = property(fget=_get_hy,fset=_set_hy)
 
     def _get_hz(self):
-        """mutator of hz"""
+        """accessor of hz"""
         return self._hz
     def _set_hz(self,hz):
-        """accessor of hz"""
-        self.hz = hz
+        """mutator of hz"""
+        self._hz = hz
         self.Dz=1/(2*self._Raz*self._Cm*self._hz)
     hz = property(fget=_get_hz,fset=_set_hz)
 
     def _get_Cm(self):
-        """mutator of Cm"""
+        """accessor of Cm"""
         return self._Cm
     def _set_Cm(self,Cm):
-        """accessor of Cm"""
-        self.Cm= Cm
+        """mutator of Cm"""
+        self._Cm= Cm
         self.Dx=1/(2*self._Rax*self._Cm*self._hx)
         self.Dy=1/(2*self._Ray*self._Cm*self._hy)
         self.Dz=1/(2*self._Raz*self._Cm*self._hz)
     Cm = property(fget=_get_Cm,fset=_set_Cm)
 
     def _get_Rax(self):
-        """mutator of Rax"""
+        """accessor of Rax"""
         return self._Rax
     def _set_Rax(self,Rax):
-        """accessor of Rax"""
-        self.Rax = Rax
+        """mutator of Rax"""
+        self._Rax = Rax
         self.Dx=1/(2*self._Rax*self._Cm*self._hx)
 
     Rax = property(fget=_get_Rax,fset=_set_Rax)
 
     def _get_Ray(self):
-        """mutator of Ray"""
+        """accessor of Ray"""
         return self._Ray
     def _set_Ray(self,Ray):
-        """accessor of Ray"""
-        self.Ray = Ray
+        """mutator of Ray"""
+        self._Ray = Ray
         self.Dy=1/(2*self._Ray*self._Cm*self._hy)
     Ray = property(fget=_get_Ray,fset=_set_Ray)
 
     def _get_Raz(self):
-        """mutator of Raz"""
+        """accessor of Raz"""
         return self._Raz
     def _set_Raz(self,Raz):
-        """accessor of Raz"""
-        self.Raz = Raz
+        """mutator of Raz"""
+        self._Raz = Raz
         self.Dz=1/(2*self._Raz*self._Cm*self._hz)
     Raz = property(fget=_get_Raz,fset=_set_Raz)
 
@@ -210,12 +210,14 @@ class TissueModel:
         Dif=self.Dx*self._derivative2(Var,0)
         Dif[self.stimCoord[0]:self.stimCoord[1]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1]]=0
+        print(Dif)
         return Dif*self.mask   
     def diff2d(self,Var):
         """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)
         Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3]]=0
+        print(Dif)
         return Dif*self.mask
     def diff3d(self,Var):
         """Computes spatial derivative to get propagation."""
@@ -381,8 +383,9 @@ class Red6(TissueModel):
         self.dY[...,4] = (hki-nk)/tnk
         self.dY[...,5] = self.fc*(-self.alpha*Ica - self.Kca*Ca)
         #update Y
+        self.dY *= self.masktempo
         self.derivS()
-        self.Y+=self.dY*dt*self.masktempo
+        self.Y+=self.dY*dt
         
 
 
@@ -467,12 +470,10 @@ class IntSerial(IntGen):
             self.stim = self._stim3
 
         assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
-        
 
         #Integration
         while self.mdl.time<tmax:
             Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax))
-#            self.stim(stimCoord,Ist)
             self.stim(stimCoord,Ist)
             self.stim(stimCoord2,Ist)
            # mdl.Istim[50:95,100]=Ist
@@ -489,7 +490,8 @@ class IntSerial(IntGen):
                 NbIter+=1
                 self.t[NbIter]=self.mdl.time
                 self.Vm[...,NbIter]=self.mdl.Y[...,0].copy()
-        return self.t[0:NbIter],self.Vm[...,0:NbIter]
+        self.Vm = self.Vm[...,1:NbIter-1]
+        self.t = self.t[...,1:NbIter-1]
 
 class IntPara(IntGen):
     """Integrator class using parallel computation"""
@@ -596,7 +598,9 @@ class IntPara(IntGen):
                     xyIstim2[2:4] = [max(xyIstim2[2],y[0])-y[0],min(xyIstim2[3],y[-1])-y[0]]
                 
                 Ny2 = newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1))
-            else:  y = 0
+            else:  
+                y = 0
+                Ny2 = 0
             
 
             #Creation of the model (one for each process)

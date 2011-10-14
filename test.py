@@ -1,34 +1,73 @@
 import cell_mdl
 reload(cell_mdl)
 from enthought.mayavi import mlab
+import numpy
 
-model = cell_mdl.Red3(Nx=50,Ny=50,Nz=0)
-#model = cell_mdl.Red3(Nx=20,Ny=30)
+Nx,Ny,Nz = 60,60,12
 
+model = cell_mdl.Red3(Nx,Ny,Nz)
+
+#anisotropie
+
+pdg = model.Padding/2
+
+h = numpy.ones((Nx+pdg*2,Ny+pdg*2,Nz+pdg*2,3))*model.hx
+Ra = numpy.ones((Nx+pdg*2,Ny+pdg*2,Nz+pdg*2,3))*model.Rax
+masktempo = numpy.ones((Nx+pdg*2,Ny+pdg*2,Nz+pdg*2,3))
+
+h[...,:round(Nz*2./5)+pdg,0] *= 3
+h[...,round(Nz*2./5)+pdg:round(Nz*3./5)+pdg,2] *= 3
+h[...,round(Nz*3./5)+pdg:,1] *= 3
+
+model.hx = h[...,0]
+model.hy = h[...,1]
+model.hz = h[...,2]
+
+Ra[...,:round(Nz*2./5)+pdg,0] *= 1
+Ra[...,round(Nz*2./5)+pdg:round(Nz*3./5)+pdg,2] *= 1
+Ra[...,round(Nz*3./5)+pdg:,1] *= 1
+
+model.Rax = Ra[...,0]
+model.Ray = Ra[...,1]
+model.Raz = Ra[...,2]
+
+masktempo[...,round(Nz*2./5):round(Nz*3./5),:] = 0
+masktempo[round(Nx*1./10):round(Nx*2./10),round(Ny*1./10):round(Ny*2./10),round(Nz*2./5):round(Nz*3./5),:] = 1
+masktempo[round(Nx*8./10):round(Nx*9./10),round(Ny*8./10):round(Ny*9./10),round(Nz*2./5):round(Nz*3./5),:] = 1
+
+model.masktempo = masktempo
+
+stimCoord = [round(Nx*5./10),round(Nx*6./10),round(Ny*2./10),round(Ny*8./10),pdg,pdg+1]
 
 tmdl = cell_mdl.IntPara(model)
 tmdl2 = cell_mdl.IntSerial(model)
-[t,v]=tmdl2.compute(tmax=100,stimCoord=[25,30,25,30],stimCoord2=[10,12,10,12])
+tmdl.compute(tmax=10,stimCoord=stimCoord)
+
 
 #mlab.contour3d(v[...,-1])
 
-#s = mlab.pipeline.image_plane_widget(mlab.pipeline.scalar_field(v[...,-1]),
-#                            plane_orientation='x_axes',
-#                            slice_index=10,
-#                            vmin = v[...,-1].min(),
-#                            vmax = -30
+v = tmdl.Vm[...,1:]
+
+s = mlab.pipeline.image_plane_widget(mlab.pipeline.scalar_field(v[...,-2]),
+                            plane_orientation='z_axes',
+                            slice_index=3,
+                            vmin = v.min(),
+                            vmax = v.max()
+                        )
+
+#s2 = mlab.pipeline.image_plane_widget(mlab.pipeline.scalar_field(v[...,-2]),
+#                            plane_orientation='y_axes',
+#                            slice_index=round(Ny*2./10)+1,
+#                            vmin = v.min(),
+#                            vmax = v.max()
 #                        )
 
-#s2 = mlab.pipeline.image_plane_widget(mlab.pipeline.scalar_field(v[...,-1]),
-#                            plane_orientation='y_axes',
-#                            slice_index=10,
-#                        )
-#mlab.scalarbar(s,orientation='vertical',nb_labels=4,label_fmt='%.3f')
-#mlab.outline()
+mlab.scalarbar(s,orientation='vertical',nb_labels=4,label_fmt='%.3f')
+mlab.outline()
 
 ##pour animation
-#for i in range(v.shape[-1]):
-#    s.mlab_source.scalars = v[...,i]
+for i in range(v.shape[-1]):
+    s.mlab_source.scalars = v[...,i]
 #    s2.mlab_source.scalars = v[...,i]
 
 
