@@ -8,6 +8,7 @@ import pylab
 import matplotlib.cm as cm
 from scipy.ndimage.filters import correlate1d
 from IPython.parallel import Client
+from warnings import warn
 
 class TissueModel(object):
     """Generic cell and tissue model."""
@@ -107,7 +108,6 @@ class TissueModel(object):
         #option for noisy initial state
         if noise!=0.0:
             self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise    
-
         
     def copyparams(self,mdl):
         """Retrieves parameters from 'mdl', if it has the same class as self."""
@@ -116,7 +116,6 @@ class TissueModel(object):
         else:
             for par in mdl.parlist:
                 self.__dict__[par]=mdl.__dict__[par]
-    
 
     def _get_hx(self):
         """accessor of hx"""
@@ -124,8 +123,8 @@ class TissueModel(object):
     def _set_hx(self,hx):
         """mutator of hx"""
         self._hx = hx
-        self.Dx=1/(2*self._Rax*self._Cm*self._hx)
-
+        try: self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+        except ValueError: warn("ValueError! Dx was not changed")
     hx = property(_get_hx,_set_hx)
 
     def _get_hy(self):
@@ -134,7 +133,8 @@ class TissueModel(object):
     def _set_hy(self,hy):
         """mutator of hy"""
         self._hy = hy
-        self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        try: self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        except ValueError: warn("ValueError! Dy was not changed")
     hy = property(fget=_get_hy,fset=_set_hy)
 
     def _get_hz(self):
@@ -143,7 +143,8 @@ class TissueModel(object):
     def _set_hz(self,hz):
         """mutator of hz"""
         self._hz = hz
-        self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        try: self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        except ValueError: warn("ValueError! Dz was not changed")
     hz = property(fget=_get_hz,fset=_set_hz)
 
     def _get_Cm(self):
@@ -152,9 +153,12 @@ class TissueModel(object):
     def _set_Cm(self,Cm):
         """mutator of Cm"""
         self._Cm= Cm
-        self.Dx=1/(2*self._Rax*self._Cm*self._hx)
-        self.Dy=1/(2*self._Ray*self._Cm*self._hy)
-        self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        try: self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+        except ValueError: warn("ValueError! Dx was not changed")
+        try: self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        except ValueError: warn("ValueError! Dy was not changed")
+        try: self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        except ValueError: warn("ValueError! Dz was not changed")
     Cm = property(fget=_get_Cm,fset=_set_Cm)
 
     def _get_Rax(self):
@@ -163,8 +167,8 @@ class TissueModel(object):
     def _set_Rax(self,Rax):
         """mutator of Rax"""
         self._Rax = Rax
-        self.Dx=1/(2*self._Rax*self._Cm*self._hx)
-
+        try: self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+        except ValueError: warn("ValueError! Dx was not changed")
     Rax = property(fget=_get_Rax,fset=_set_Rax)
 
     def _get_Ray(self):
@@ -173,7 +177,8 @@ class TissueModel(object):
     def _set_Ray(self,Ray):
         """mutator of Ray"""
         self._Ray = Ray
-        self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        try: self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        except ValueError: warn("ValueError! Dy was not changed")
     Ray = property(fget=_get_Ray,fset=_set_Ray)
 
     def _get_Raz(self):
@@ -182,7 +187,8 @@ class TissueModel(object):
     def _set_Raz(self,Raz):
         """mutator of Raz"""
         self._Raz = Raz
-        self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        try: self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        except ValueError: warn("ValueError! Dz was not changed")
     Raz = property(fget=_get_Raz,fset=_set_Raz)
 
 
@@ -210,14 +216,12 @@ class TissueModel(object):
         Dif=self.Dx*self._derivative2(Var,0)
         Dif[self.stimCoord[0]:self.stimCoord[1]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1]]=0
-        print(Dif)
         return Dif*self.mask   
     def diff2d(self,Var):
         """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)
         Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3]]=0
-        print(Dif)
         return Dif*self.mask
     def diff3d(self,Var):
         """Computes spatial derivative to get propagation."""
@@ -612,13 +616,24 @@ class IntPara(IntGen):
             mdl.setlistparams(listparam)
             mdl.Name += 'p'
 
-            if not(isinstance(mdl.masktempo,int)):
-                if mdl.masktempo.ndim == 1:
-                    mdl.masktempo = mdl.masktempo[x[0]:x[1]]
-                elif mdl.masktempo.ndim == 2:
-                    mdl.masktempo = mdl.masktempo[x[0]:x[1],y[0]:y[1]]
+            def modify(var,x,y):
+                if not(isinstance(var,int)):
+                    if var.ndim == 1:
+                        return var[x[0]:x[1]]
+                    elif var.ndim == 2:
+                        return var[x[0]:x[1],y[0]:y[1]]
+                    else:
+                        return var[x[0]:x[1],y[0]:y[1],:]
                 else:
-                    mdl.masktempo = mdl.masktempo[x[0]:x[1],y[0]:y[1],:]
+                    return var
+
+            mdl.masktempo = modify(mdl.masktempo,x,y)
+            mdl.hx = modify(mdl.hx,x,y)
+            mdl.hy = modify(mdl.hy,x,y)
+            mdl.hz = modify(mdl.hz,x,y)
+            mdl.Rax = modify(mdl.Rax,x,y)
+            mdl.Ray = modify(mdl.Ray,x,y)
+            mdl.Raz = modify(mdl.Raz,x,y)
 
             #Tells the model where the stimuli are
             if xyIstim1[0] != -1 and (Ny and xyIstim1[2] != -1):
@@ -853,6 +868,8 @@ class IntPara(IntGen):
 	                return comp
                 comp += 1
             return -1
+
+        v = tabResults[0]['Vm']
 
         # Aggregation of the results
         if Nx*Ny*Nz:
