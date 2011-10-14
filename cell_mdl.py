@@ -9,6 +9,8 @@ import matplotlib.cm as cm
 from scipy.ndimage.filters import correlate1d
 from IPython.parallel import Client
 from warnings import warn
+from enthought.mayavi import mlab
+
 
 class TissueModel(object):
     """Generic cell and tissue model."""
@@ -416,9 +418,36 @@ class IntGen():
             pylab.imshow(self.Vm,aspect='auto',cmap=cm.jet)
             pylab.show()
         elif self.Vm.ndim == 3:
-            print "2D Vm is not supported"
+            s = mlab.surf(self.Vm[...,0])
+            raw_input("Press Enter to lauch the simulation...")
+            for i in range(self.Vm.shape[-1]):
+                s.mlab_source.scalars = self.Vm[...,i]
         elif self.Vm.ndim == 4:
-            print "2.5D Vm is not supported"
+            p = mlab.pipeline.scalar_field(self.Vm[...,0])
+            s = mlab.pipeline.image_plane_widget( p,
+                                        plane_orientation='x_axes',
+                                        slice_index=self.mdl.stimCoord[0],
+                                        vmin = self.Vm.min(),
+                                        vmax = self.Vm.max()
+                                    )
+
+            s2 = mlab.pipeline.image_plane_widget(p,
+                                        plane_orientation='y_axes',
+                                        slice_index=self.mdl.stimCoord[2],
+                                        vmin = self.Vm.min(),
+                                        vmax = self.Vm.max()
+                                    )
+            s3 = mlab.pipeline.image_plane_widget( p,
+                                        plane_orientation='z_axes',
+                                        slice_index=self.mdl.stimCoord[4],
+                                        vmin = self.Vm.min(),
+                                        vmax = self.Vm.max()
+                                    )
+            mlab.scalarbar(s,orientation='vertical',nb_labels=4,label_fmt='%.3f')
+            mlab.outline(color=(1,1,1))
+            raw_input("Press Enter to lauch the simulation...")
+            for i in range(self.Vm.shape[-1]):
+                p.mlab_source.scalars = self.Vm[...,i]
  
 
 class IntSerial(IntGen):
@@ -617,7 +646,7 @@ class IntPara(IntGen):
             mdl.Name += 'p'
 
             def modify(var,x,y):
-                if not(isinstance(var,int)):
+                if not(isinstance(var,int)) and not(isinstance(var,float)):
                     if var.ndim == 1:
                         return var[x[0]:x[1]]
                     elif var.ndim == 2:
